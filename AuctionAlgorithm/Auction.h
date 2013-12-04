@@ -16,9 +16,6 @@
 namespace LSAP
 {
 
-/**
- *
- */
 template<typename Scalar = double, typename MatrixType = Eigen::Matrix<double, -1, -1> >
 class Auction
 {
@@ -35,6 +32,7 @@ public:
 	typedef typename AuctionCommon<Scalar>::Scalars Scalars;
 	typedef typename AuctionCommon<Scalar>::Locks Locks;
 	typedef typename AuctionCommon<Scalar>::Indizes Indizes;
+	typedef typename AuctionCommon<Scalar>::Edge Edge;
 	typedef typename AuctionCommon<Scalar>::Edges Edges;
 
 	/**
@@ -43,7 +41,7 @@ public:
 	 * @param a nxm weight matrix of type Scalar
 	 * @return vector of Edges which represent the assignments
 	 */
-	static const Edges solve(MatrixType & a)
+	static const Edges solve(const MatrixType & a)
 	{
 //		const Scalar e = __AUCTION_EPSILON_MULTIPLIER;
 		const size_t rows = a.rows();
@@ -113,6 +111,7 @@ private:
 
 	/**
 	 * template specific implementation for finding the best entry in row
+	 * used for dense matrix
 	 * @param a	input matrix
 	 * @param prices prices
 	 * @param i row
@@ -122,7 +121,7 @@ private:
 	 * @param j_i best entry
 	 * @return true if assignment was found, otherwise false
 	 */
-	inline static const bool findForward( Eigen::Matrix<Scalar, -1, -1> & a, const Scalars & prices, const size_t i,
+	inline static const bool findForward(const Eigen::Matrix<Scalar, -1, -1> & a, const Scalars & prices, const size_t i,
 			Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
 	{
 		const size_t cols = a.cols();
@@ -154,6 +153,7 @@ private:
 
 	/**
 	 * template specific implementation for finding the best entry in row
+	 * using eigen sparse matrix with row major storage
 	 * @param a	input matrix
 	 * @param prices prices
 	 * @param i row
@@ -163,18 +163,21 @@ private:
 	 * @param j_i best entry
 	 * @return true if assignment was found, otherwise false
 	 */
-	inline static const bool findForward( SparseMatrix<Scalar> & a, const Scalars & prices, const size_t i,
+	inline static const bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a, const Scalars & prices, const size_t i,
 			Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
 		{
+//			assert(a.IsRowMajor);
+			assert(a.isCompressed());
+
 			bool assignmentFound = false;
 
-			const size_t outerStart = a.outerIndizesRM()[i];
-			const size_t outerEnd = a.outerIndizesRM()[i + 1];
+			const auto outerStart = a.outerIndexPtr()[i];
+			const auto outerEnd = a.outerIndexPtr()[i + 1];
 
-			for (size_t innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
+			for (auto innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
 			{
-				size_t j = a.innerIndizesRM()[innerIdx];
-				const Scalar m_i_j = a.valuesRM()[innerIdx];
+				const auto j = a.innerIndexPtr()[innerIdx];
+				const Scalar m_i_j = a.valuePtr()[innerIdx];
 				const Scalar diff = m_i_j - prices[j];
 				if (diff > v_i)
 				{
@@ -193,89 +196,6 @@ private:
 			}
 			return assignmentFound;
 		}
-
-	/**
-	 * template specific implementation for finding the best entry in row
-	 * @param a	input matrix
-	 * @param prices prices
-	 * @param i row
-	 * @param v_i best value
-	 * @param w_i second best value
-	 * @param a_i_ji value of entry
-	 * @param j_i best entry
-	 * @return true if assignment was found, otherwise false
-	 */
-	inline static const bool findForward( SparseMatrixRM<Scalar> & a, const Scalars & prices, const size_t i,
-			Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
-		{
-			bool assignmentFound = false;
-
-			const size_t outerStart = a.outerIndizes()[i];
-			const size_t outerEnd = a.outerIndizes()[i + 1];
-
-			for (size_t innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
-			{
-				size_t j = a.innerIndizes()[innerIdx];
-				const Scalar m_i_j = a.values()[innerIdx];
-				const Scalar diff = m_i_j - prices[j];
-				if (diff > v_i)
-				{
-					// if there already was an entry found, this is the second best
-					if (assignmentFound)
-						w_i = v_i;
-
-					v_i = diff;
-					j_i = j;
-					a_i_ji = m_i_j;
-					assignmentFound = true;
-				}
-				if (diff > w_i && j_i != j)
-					w_i = diff;
-				// if no entry is bigger than v_i, check if there's still a bigger second best entry
-			}
-			return assignmentFound;
-		}
-
-	/**
-	 * template specific implementation for finding the best entry in row
-	 * @param a	input matrix
-	 * @param prices prices
-	 * @param i row
-	 * @param v_i best value
-	 * @param w_i second best value
-	 * @param a_i_ji value of entry
-	 * @param j_i best entry
-	 * @return true if assignment was found, otherwise false
-	 */
-	inline static const bool findForward( SparseMatrixCM<Scalar> & a, const Scalars & prices, const size_t i,
-			Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
-	{
-		const size_t cols = a.cols();
-
-		bool assignmentFound = false;
-
-		for (size_t j = 0; j < cols; j++) // for the j-th column
-		{
-			const Scalar aij = a(i,j);
-			if ( aij == 0 ) continue;
-			const Scalar diff = aij - prices[j];
-			if (diff > v_i)
-			{
-				// if there already was an entry found, this is the second best
-				if (assignmentFound)
-					w_i = v_i;
-
-				v_i = diff;
-				j_i = j;
-				a_i_ji = aij;
-				assignmentFound = true;
-			}
-			if (diff > w_i && j_i != j)
-				w_i = diff;
-			// if no entry is bigger than v_i, check if there's still a bigger second best entry
-		}
-		return assignmentFound;
-	}
 
 	/**
 	 * forward cycle of auction algorithm
@@ -287,7 +207,7 @@ private:
 	 * @param epsilon bidding increment
 	 * @return true if assignment was made, false otherwise
 	 */
-	static bool forward(MatrixType & a, Edges & E,
+	static bool forward(const MatrixType & a, Edges & E,
 			Scalars & prices, Scalars & profits, Locks & lockedRows,
 			Locks & lockedCols, Scalar & lambda, Scalar & epsilon)
 	{
@@ -385,7 +305,7 @@ private:
 
 	}
 
-	inline static const bool findReverse(const Eigen::Matrix<Scalar, -1, -1> & a, const Scalars & profits, const size_t j,
+	inline static const bool findReverse(const MatrixType & a, const Scalars & profits, const size_t j,
 			Scalar & b_j, Scalar & g_j, Scalar & a_ij_j, size_t & i_j)
 	{
 		const size_t rows = a.rows();
@@ -393,7 +313,7 @@ private:
 
 		for (size_t i = 0; i < rows; i++) // for the j-th column
 		{
-			const Scalar aij = a(i, j);
+			const Scalar aij = a.coeff(i, j);
 			if ( aij == 0 ) continue;
 			const Scalar diff = aij - profits[i];
 			if (diff > b_j)
@@ -405,94 +325,6 @@ private:
 				b_j = diff;
 				i_j = i;
 				a_ij_j = aij;
-				assignmentFound = true;
-			}
-			if (diff > g_j && i_j != i)
-				g_j = diff;
-		}
-		return assignmentFound;
-	}
-
-	inline static const bool findReverse(SparseMatrix<Scalar> & a, const Scalars & profits, const size_t j,
-			Scalar & b_j, Scalar & g_j, Scalar & a_ij_j, size_t & i_j)
-	{
-		bool assignmentFound = false;
-
-		const size_t outerStart = a.outerIndizesCM()[j];
-		const size_t outerEnd = a.outerIndizesCM()[j + 1];
-
-		for (size_t innerIdx = outerStart; innerIdx < outerEnd; ++innerIdx)
-		{
-			const size_t i = a.innerIndizesCM()[innerIdx];
-			const Scalar m_i_j = a.valuesCM()[innerIdx];
-			const Scalar diff = m_i_j - profits[i];
-			if (diff > b_j)
-			{
-				// if there already was an entry found, this is the second best
-				if (assignmentFound)
-					g_j = b_j;
-
-				b_j = diff;
-				i_j = i;
-				a_ij_j = m_i_j;
-				assignmentFound = true;
-			}
-			if (diff > g_j && i_j != i)
-				g_j = diff;
-		}
-		return assignmentFound;
-	}
-
-	inline static const bool findReverse(SparseMatrixRM<Scalar> & a, const Scalars & profits, const size_t j,
-			Scalar & b_j, Scalar & g_j, Scalar & a_ij_j, size_t & i_j)
-	{
-		const size_t rows = a.rows();
-		bool assignmentFound = false;
-
-		for (size_t i = 0; i < rows; i++) // for the j-th column
-		{
-			const Scalar aij = a(i, j);
-			if ( aij == 0 ) continue;
-			const Scalar diff = aij - profits[i];
-			if (diff > b_j)
-			{
-				// if there already was an entry found, this is the second best
-				if (assignmentFound)
-					g_j = b_j;
-
-				b_j = diff;
-				i_j = i;
-				a_ij_j = aij;
-				assignmentFound = true;
-			}
-			if (diff > g_j && i_j != i)
-				g_j = diff;
-		}
-		return assignmentFound;
-	}
-
-	inline static const bool findReverse(SparseMatrixCM<Scalar> & a, const Scalars & profits, const size_t j,
-			Scalar & b_j, Scalar & g_j, Scalar & a_ij_j, size_t & i_j)
-	{
-		bool assignmentFound = false;
-
-		const size_t outerStart = a.outerIndizes()[j];
-		const size_t outerEnd = a.outerIndizes()[j + 1];
-
-		for (size_t innerIdx = outerStart; innerIdx < outerEnd; ++innerIdx)
-		{
-			const size_t i = a.innerIndizes()[innerIdx];
-			const Scalar m_i_j = a.values()[innerIdx];
-			const Scalar diff = m_i_j - profits[i];
-			if (diff > b_j)
-			{
-				// if there already was an entry found, this is the second best
-				if (assignmentFound)
-					g_j = b_j;
-
-				b_j = diff;
-				i_j = i;
-				a_ij_j = m_i_j;
 				assignmentFound = true;
 			}
 			if (diff > g_j && i_j != i)
@@ -511,7 +343,7 @@ private:
 	 * @param epsilon bidding increment
 	 * @return true if assignment was made, false otherwise
 	 */
-	static bool reverse(MatrixType & a, Edges & E,
+	static bool reverse(const MatrixType & a, Edges & E,
 			Scalars & prices, Scalars & profits, Locks & lockedRows,
 			Locks & lockedCols, Scalar & lambda, const Scalar & epsilon)
 	{

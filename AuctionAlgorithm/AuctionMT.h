@@ -16,7 +16,7 @@
 namespace LSAP
 {
 
-//#define __AUCTION_DEBUG
+#define __AUCTION_DEBUG
 
 /**
  *
@@ -29,6 +29,7 @@ public:
 	typedef typename AuctionCommon<Scalar>::Scalars Scalars;
 	typedef typename AuctionCommon<Scalar>::Locks Locks;
 	typedef typename AuctionCommon<Scalar>::Indizes Indizes;
+	typedef typename AuctionCommon<Scalar>::Edge Edge;
 	typedef typename AuctionCommon<Scalar>::Edges Edges;
 	typedef typename AuctionCommon<Scalar>::BidResults BidResults;
 
@@ -46,7 +47,7 @@ public:
 	 * @param a nxm weight matrix of type Scalar
 	 * @return assignment matrix which has maximum value of objective function
 	 */
-	static Edges solve(MatrixType & m, const size_t noOfThreads = 4) //, const Scalar e = __AUCTION_EPSILON_MULTIPLIER)
+	static Edges solve(const MatrixType & m, const size_t noOfThreads = 2) //, const Scalar e = __AUCTION_EPSILON_MULTIPLIER)
 	{
 		Edges edges;
 		Scalars prices(m.cols(), 0.);
@@ -73,10 +74,11 @@ public:
 		// otherwise do this within the forward/reverse iteration, because intervals depend on
 		// column/row
 		if ( std::is_same<MatrixType, Eigen::Matrix<Scalar, -1, -1>>::value )
-		{
 			iterationIntervalsForward = AuctionCommon<Scalar>::splitToIntervals(noOfThreads, m.cols());
-			iterationIntervalsReverse = AuctionCommon<Scalar>::splitToIntervals(noOfThreads, m.rows());
-		}
+
+		// reverse intervals are the same for both matrix-types
+		iterationIntervalsReverse = AuctionCommon<Scalar>::splitToIntervals(noOfThreads, m.rows());
+
 
 		BidResults results(noOfThreads);
 
@@ -223,20 +225,9 @@ private:
 
 			index = j; // global index for threads
 
-			// if sparse-matrix is used: split row/column dependent intervals for threads
-			// offset is used for inner index offset
-			size_t offset = 0;
-			if (std::is_same<MatrixType, SparseMatrix<Scalar>>::value)
-			{
-				Indizes it =
-						AuctionCommon<Scalar>::splitToIntervalsByMatrixType(m, noOfThreads, j, false, offset);
-				for ( size_t i = 0; i < it.size(); ++i ) iterationIntervals[i] = offset + it[i];
-//				std::cout << "reverse: offset = " << offset << " "; PRINTVECTOR(iterationIntervals)
-			}
-
 			// sync and run local function for id 0
 			barrierParams();
-			AuctionCommon<Scalar>::reverseGS(m, 0, j, offset, iterationIntervals[0], profits, results);
+			AuctionCommon<Scalar>::reverseGS(m, 0, j, 0, iterationIntervals[0], profits, results);
 			barrierResult();
 
 			// values and indizes for the best assignment
@@ -366,21 +357,15 @@ private:
 			// offset is used for inner index offset
 			size_t offset = 0;
 
-			if (std::is_same<MatrixType, SparseMatrix<Scalar>>::value || std::is_same<MatrixType, SparseMatrixRM<Scalar>>::value )
-			{
-				Indizes it =
-						AuctionCommon<Scalar>::splitToIntervalsByMatrixType(m, noOfThreads, i, true, offset );
-				for ( size_t i = 0; i < it.size(); ++i ) iterationIntervals[i] = offset + it[i];
-			}
-//			std::cout <<  "offset = " << offset << " ";
-//			PRINTVECTOR(iterationIntervals)
+			Indizes it =
+					AuctionCommon<Scalar>::splitToIntervalsByMatrixType(m, noOfThreads, i, true, offset );
+			for ( size_t i = 0; i < it.size(); ++i ) iterationIntervals[i] = offset + it[i];
+
+
 			// BARRIER
 			barrierParams();
 			AuctionCommon<Scalar>::forwardGS(m, 0, i, offset, iterationIntervals[0], prices, results);
 			barrierResult();
-
-//			for (size_t t = 0; t < noOfThreads; t++)
-//				pthread_join(threads[t], NULL);
 
 			// values and indizes for the best assignment
 			size_t j_i = 0;
@@ -414,11 +399,6 @@ private:
 
 			if (foundBest) // best assignment found in row?
 			{
-//			std::cout <<  "parallelForward: found best assignment (" << i << ", "
-//					<< j_i << ") with v_i = " << v_i
-//					<< " & w_i = " << w_i
-//					<< " a_i_ji = " << a_i_ji
-//					<< std::endl;
 
 				// P_i = w_i - epsilon
 				profits[i] = w_i - epsilon;
@@ -442,8 +422,6 @@ private:
 					for (auto & e : edges)
 						if (e.y == j_i) // change edge to new assignment
 						{
-//						std::cout << "changing edge (" << e.x << ", " << e.y << ") " << "-> (" << i << ", " << j_i << ")" << std::endl;
-
 							newEdgeFound = false;
 							lockedRows[e.x] = false; // unlock row
 							e.v = a_i_ji;

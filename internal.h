@@ -8,38 +8,19 @@
 #ifndef INTERNAL_H_
 #define INTERNAL_H_
 
-#define __PROJECT_LOG std::cerr
 #include <vector>
 #include <eigen3/Eigen/Core>
 #include <boost/chrono/chrono_io.hpp>
 #include <eigen3/Eigen/Sparse>
-#include "Matrix/SparseMatrix.h"
-#define NO_CL
+
 #define __AUCTION_EPSILON_MULTIPLIER 1e-5 	// epsilon multiplier
 #define __AUCTION_INF 1e6 					// infinity for setting second best match
 
-typedef Eigen::Matrix<size_t, -1, -1> AssignmentMatrix;
-
-// which type of coefficient in weight matrix
+//// which type of coefficient in weight matrix
 typedef double Scalar;
-
-// represents edges/assignments
-typedef std::pair<size_t, size_t> Assignment;
-typedef std::vector<Assignment> Assignments;
-
-struct Edge
-{
-	size_t x;
-	size_t y;
-	Scalar v;
-};
-
-typedef std::vector<Edge> Edges;
 
 // locking of rows/cols
 typedef std::vector<bool> LockVector;
-
-enum APSolvingMode { MAXIMIZATION, MINIMIZATION };
 
 
 #define MEASURE_DURATION_SINGLE(__MD_COMMAND__) \

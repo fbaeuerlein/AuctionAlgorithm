@@ -11,9 +11,18 @@ typedef double Scalar;
 
 typedef Eigen::Matrix<Scalar, -1, -1> WeightMatrix;
 
+const Scalar objFuncValue(const typename Auction<Scalar>::Edges & edges )
+{
+	Scalar val = 0.;
+	for ( auto & e : edges)
+		val += e.v;
+
+	return val;
+}
+
 int main(int argc, char **argv)
 {
-	const size_t rows = 2000, cols = 5000;
+	const size_t rows = 5000, cols = 5000;
 
 	// assert that rows <= cols and coefficients are between 0 and 1!
 	Eigen::MatrixXd m = Eigen::MatrixXd::Random(rows, cols);
@@ -26,21 +35,31 @@ int main(int argc, char **argv)
 	m /= m.maxCoeff(); // normalize to 0..1
 
 	// create sparse matrix from dense
-	// this could take some time!
-	// currently there's an own sparse class, might be changed to eigen sparse type
-	// this matrix type stores the matrix in rowMajor AND colMajor format, so it uses
-	// a lot of space! (this was due to testing purposes)
-	SparseMatrix<double> s(m);
+	Eigen::SparseMatrix<double, Eigen::RowMajor> s(rows, cols);
+	s = m.sparseView(); // fill sparse from dense
+	s.makeCompressed(); // be sure to compress!
 
 	// result type
-	Edges solution;
+	Auction<double>::Edges solution;
 
 	// single threaded computation and some time measurement
 	MEASURE_DURATION_SINGLE((solution = Auction<double>::solve(m)));
-	MEASURE_DURATION_SINGLE((solution = Auction<double, SparseMatrix<double> >::solve(s)));
+	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
 
-	// multi threaded computation (2 threads) and time measurement
+//	for ( auto & e: solution )
+//		std::cout << "(" << e.x << ", " << e.y << ") ";
+//	std::cout << std::endl;
+
+	MEASURE_DURATION_SINGLE((solution = Auction<double, Eigen::SparseMatrix<double, Eigen::RowMajor> >::solve(s)));
+	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
+
+//
+//	// multi threaded computation (2 threads) and time measurement
 	MEASURE_DURATION_SINGLE((solution = AuctionMT<double>::solve(m, 2)));
-	MEASURE_DURATION_SINGLE((solution = AuctionMT<double, SparseMatrix<double> >::solve(s, 2)));
+	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
+
+	MEASURE_DURATION_SINGLE((solution = AuctionMT<double, Eigen::SparseMatrix<double, Eigen::RowMajor> >::solve(s, 2)));
+	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
+
 
 }
