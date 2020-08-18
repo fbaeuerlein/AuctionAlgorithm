@@ -8,6 +8,7 @@
 #ifndef THREADBARRIER_H_
 #define THREADBARRIER_H_
 #include <atomic>
+#include <unistd.h>
 
 namespace LSAP
 {

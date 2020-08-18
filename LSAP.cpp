@@ -1,10 +1,8 @@
 
 #include "AuctionAlgorithm/Auction.h"
 #include "AuctionAlgorithm/AuctionMT.h"
-#include "Matrix/SparseMatrix.h"
-#include <boost/random/mersenne_twister.hpp>
-#include <boost/random/uniform_int_distribution.hpp>
-#include <boost/random/uniform_real_distribution.hpp>
+
+#include <random>
 using namespace LSAP;
 
 typedef double Scalar;
