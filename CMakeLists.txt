@@ -1,5 +1,8 @@
+cmake_minimum_required(VERSION 3.0)
+
 project(AuctionAlgorithm)
-cmake_minimum_required(VERSION 2.8)
+
+add_subdirectory(test)
 aux_source_directory(. SRC_LIST)
 
 include_directories(./external/)

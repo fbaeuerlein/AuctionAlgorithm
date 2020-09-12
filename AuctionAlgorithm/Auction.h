@@ -16,7 +16,7 @@
 namespace LSAP
 {
 
-template<typename Scalar = double, typename MatrixType = Eigen::Matrix<double, -1, -1> >
+template<typename Scalar = double, typename MatrixType = Eigen::Matrix<Scalar, -1, -1> >
 class Auction
 {
 private:
