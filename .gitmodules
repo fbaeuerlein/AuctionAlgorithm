@@ -1,3 +1,6 @@
 [submodule "external/eigen"]
 	path = external/eigen
 	url = https://gitlab.com/libeigen/eigen.git
+[submodule "test/external/googletest"]
+	path = test/external/googletest
+	url = https://www.github.com/google/googletest.git
