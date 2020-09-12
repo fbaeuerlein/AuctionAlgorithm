@@ -90,3 +90,35 @@ TEST(test_data, data_02) {
   EXPECT_EQ(0, solution[3].y);
 
 }
+
+TEST(test_data, data_03) {
+
+  // example from
+  // http://www.cse.psu.edu/~rtc12/CSE598C/comboptBlockICM.pdf
+  Eigen::MatrixXd m = Eigen::Matrix<double, 5, 5>();
+
+  // clang-format off
+    m <<   
+      0.95,   0.76,   0.62,   0.41,   0.06,
+      0.23,   0.46,   0.79,   0.94,   0.35,
+      0.61,   0.02,   0.92,   0.92,   0.81,   
+      0.49,   0.82,   0.74,   0.41,   0.01,   
+      0.89,   0.44,   0.18,   0.89,   0.14;
+  // clang-format on
+
+    m.normalize();
+
+  // for ( size_t i = 0; i < m.rows(); ++i )
+  //   for ( size_t j = 0; j < m.cols(); ++j )
+  //       m(i, j) = 1. - m(i, j);
+
+  auto solution = Auction<double>::solve(m.normalized());
+  auto x = objectiveFunctionValue<double>(solution);
+  typedef typename Auction<double>::Edge Edge;
+  std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
+  EXPECT_EQ(0, solution[0].y);
+  EXPECT_EQ(2, solution[1].y);
+  EXPECT_EQ(4, solution[2].y);
+  EXPECT_EQ(1, solution[3].y);
+  EXPECT_EQ(3, solution[4].y);
+}
