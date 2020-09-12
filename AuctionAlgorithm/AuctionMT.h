@@ -28,18 +28,12 @@ public:
 
 	typedef typename AuctionCommon<Scalar>::Scalars Scalars;
 	typedef typename AuctionCommon<Scalar>::Locks Locks;
-	typedef typename AuctionCommon<Scalar>::Indizes Indizes;
+	typedef typename AuctionCommon<Scalar>::Indices Indices;
 	typedef typename AuctionCommon<Scalar>::Edge Edge;
 	typedef typename AuctionCommon<Scalar>::Edges Edges;
 	typedef typename AuctionCommon<Scalar>::BidResults BidResults;
 
-	AuctionMT()
-	{
-	}
-
-	virtual ~AuctionMT()
-	{
-	}
+	AuctionMT() = delete;
 
 	/**
 	 * solve the assignment with the auction algorithm
@@ -66,9 +60,9 @@ public:
 		ThreadBarrier barrierParamsReverse(noOfThreads);
 		ThreadBarrier barrierResultsReverse(noOfThreads);
 
-		Indizes iterationIntervalsForward(noOfThreads);
+		Indices iterationIntervalsForward(noOfThreads);
 
-		Indizes iterationIntervalsReverse (noOfThreads);
+		Indices iterationIntervalsReverse (noOfThreads);
 
 		// if matrix is dense eigen-type => pre-fill the iteration intervals for threads
 		// otherwise do this within the forward/reverse iteration, because intervals depend on
@@ -161,11 +155,14 @@ public:
 		barrierResultsForward.kill();
 		barrierResultsReverse.kill();
 
-		for (size_t t = 0; t < threadsForward.size(); t++)
-			threadsForward[t].join();
-
-		for (size_t t = 0; t < threadsReverse.size(); t++)
-			threadsReverse[t].join();
+		for (auto & t : threadsForward)
+		{
+			t.join();
+		}
+		for ( auto & t : threadsReverse)
+		{
+			t.join();
+		}
 
 		return edges;
 	}
@@ -202,7 +199,7 @@ private:
 	static bool parallelReverse(const MatrixType & m, Scalars & prices,
 			Scalars & profits, Locks & lockedRows, Locks & lockedCols,
 			Edges & edges, Scalar & lambda, const Scalar epsilon,
-			BidResults & results, Indizes & iterationIntervals,
+			BidResults & results, Indices & iterationIntervals,
 			const size_t noOfThreads, size_t & index,
 			ThreadBarrier & barrierParams, ThreadBarrier & barrierResult)
 	{
@@ -335,7 +332,7 @@ private:
 	static bool parallelForward(const MatrixType & m, Scalars & prices,
 			Scalars & profits, Locks & lockedRows, Locks & lockedCols,
 			Edges & edges, const Scalar lambda, const Scalar epsilon,
-			BidResults & results, Indizes & iterationIntervals,
+			BidResults & results, Indices & iterationIntervals,
 			const size_t noOfThreads, size_t & index,
 			ThreadBarrier & barrierParams, ThreadBarrier & barrierResult)
 	{
@@ -357,7 +354,7 @@ private:
 			// offset is used for inner index offset
 			size_t offset = 0;
 
-			Indizes it =
+			Indices it =
 					AuctionCommon<Scalar>::splitToIntervalsByMatrixType(m, noOfThreads, i, true, offset );
 			for ( size_t i = 0; i < it.size(); ++i ) iterationIntervals[i] = offset + it[i];
 
