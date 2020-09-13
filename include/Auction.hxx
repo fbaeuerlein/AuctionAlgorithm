@@ -19,11 +19,6 @@ namespace Auction
 template <typename Scalar = double, typename MatrixType = Eigen::Matrix<Scalar, -1, -1>>
 class Solver
 {
-  private:
-    Solver() = delete;
-
-    virtual ~Solver() = delete;
-
   public:
     typedef typename AuctionCommon<Scalar>::Scalars Scalars;
     typedef typename AuctionCommon<Scalar>::Locks Locks;
@@ -31,6 +26,29 @@ class Solver
     typedef typename AuctionCommon<Scalar>::Edge Edge;
     typedef typename AuctionCommon<Scalar>::Edges Edges;
 
+  private:
+    Solver() = delete;
+
+  protected:
+    Solver(size_t const & rows, size_t const & cols)
+        : _rows(rows)
+        , _cols(cols)
+        , _locked_rows(rows, false)
+        , _locked_cols(cols, false)
+        , _lambda(0.)
+        , _epsilon(__AUCTION_EPSILON_MULTIPLIER / cols)
+        , _prices(cols, .0)
+        , _profits(rows, 1.) // condition 3: initially set p_j >= lambda
+    {
+    }
+
+    size_t _rows, _cols;
+    Locks _locked_rows, _locked_cols;
+    Scalar _lambda, _epsilon;
+    Scalars _prices, _profits;
+    Edges _edges; // refactor to use vector index as row/col index
+
+  public:
     /**
      * solve the assignment problem with the auction algorithm
      * use real-types as coefficients, otherwise scaling will not work properly!
@@ -39,19 +57,7 @@ class Solver
      */
     static const Edges solve(const MatrixType & a)
     {
-        //		const Scalar e = __AUCTION_EPSILON_MULTIPLIER;
-        const size_t rows = a.rows();
-        const size_t cols = a.cols();
-
-        Locks lockedRows(a.rows(), false);
-        Locks lockedCols(a.cols(), false);
-        Edges E;
-
-        Scalar lambda = .0;
-        Scalar epsilon = __AUCTION_EPSILON_MULTIPLIER / a.cols();
-
-        // condition 3: initially set p_j >= lambda
-        Scalars prices(cols, .0), profits(rows, 1.); // p-Vector  (1 to j) = p_j
+        Solver s(a.rows(), a.cols());
 
         do
         {
@@ -59,10 +65,25 @@ class Solver
             //		Execute iterations of the forward auction algorithm until at least one
             //		more person becomes assigned. If there is an unassigned person left, go
             //		to step 2; else go to step 3.
-            while (forward(a, E, prices, profits, lockedRows, lockedCols, lambda, epsilon))
+            while (s.forward(a))
                 ;
 
-            if (!Solver<Scalar>::areAllPersonsAssigned(lockedRows))
+            if (s.areAllPersonsAssigned())
+            {
+                //		Step 3 (reverse auction):
+                //		Execute successive iterations of the reverse auction algorithm until
+                // the 		algorithm terminates with p_j <= lambda for all unassigned objects j
+                while (true)
+                {
+                    s.reverse(a);
+                    if (s.unassignedObjectsLowerThanLambda())
+                    {
+                        break;
+                    }
+                }
+                break;
+            }
+            else
             {
 
                 //		Step 2 (reverse auction cycle):
@@ -70,31 +91,13 @@ class Solver
                 // least 		one more object becomes assigned or until we have p_j <=
                 // lambda for all 		unassigned objects. If there is an unassigned person
                 // left, go to step 1 else go to step 3
-                while (
-                    !reverse(a, E, prices, profits, lockedRows, lockedCols, lambda, epsilon) ||
-                    !Solver<Scalar>::unassignedObjectsLTlambda(lockedCols, prices, lambda))
+                while (!s.reverse(a) || !s.unassignedObjectsLowerThanLambda())
                     ; // reverse auction
-            }
-
-            if (Solver<Scalar>::areAllPersonsAssigned(lockedRows))
-            {
-                //		Step 3 (reverse auction):
-                //		Execute successive iterations of the reverse auction algorithm until
-                // the 		algorithm terminates with p_j <= lambda for all unassigned objects j
-                while (true)
-                {
-                    reverse(a, E, prices, profits, lockedRows, lockedCols, lambda, epsilon);
-                    if (Solver<Scalar>::unassignedObjectsLTlambda(lockedCols, prices, lambda))
-                    {
-                        break;
-                    }
-                }
-                break;
             }
 
         } while (true);
 
-        return E;
+        return s._edges;
     }
 
   private:
@@ -102,7 +105,6 @@ class Solver
      * template specific implementation for finding the best entry in row
      * used for dense matrix
      * @param a	input matrix
-     * @param prices prices
      * @param i row
      * @param v_i best value
      * @param w_i second best value
@@ -110,9 +112,8 @@ class Solver
      * @param j_i best entry
      * @return true if assignment was found, otherwise false
      */
-    inline static const bool findForward(const Eigen::Matrix<Scalar, -1, -1> & a,
-                                         const Scalars & prices, const size_t i, Scalar & v_i,
-                                         Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
+    bool findForward(const Eigen::Matrix<Scalar, -1, -1> & a, const size_t i, Scalar & v_i,
+                     Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
     {
         const size_t cols = a.cols();
 
@@ -125,7 +126,7 @@ class Solver
             {
                 continue;
             }
-            const Scalar diff = aij - prices[j];
+            const Scalar diff = aij - _prices[j];
             if (diff > v_i)
             {
                 // if there already was an entry found, this is the second best
@@ -152,7 +153,6 @@ class Solver
      * template specific implementation for finding the best entry in row
      * using eigen sparse matrix with row major storage
      * @param a	input matrix
-     * @param prices prices
      * @param i row
      * @param v_i best value
      * @param w_i second best value
@@ -160,9 +160,8 @@ class Solver
      * @param j_i best entry
      * @return true if assignment was found, otherwise false
      */
-    inline static const bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a,
-                                         const Scalars & prices, const size_t i, Scalar & v_i,
-                                         Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
+    bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a, const size_t i,
+                     Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
     {
         //			assert(a.IsRowMajor);
         assert(a.isCompressed());
@@ -176,7 +175,7 @@ class Solver
         {
             const auto j = a.innerIndexPtr()[innerIdx];
             const Scalar m_i_j = a.valuePtr()[innerIdx];
-            const Scalar diff = m_i_j - prices[j];
+            const Scalar diff = m_i_j - _prices[j];
             if (diff > v_i)
             {
                 // if there already was an entry found, this is the second best
@@ -200,17 +199,11 @@ class Solver
     }
 
     /**
-     * forward cycle of auction algorithm
+     * @brief Forward cycle of auction algorithm
      * @param a weight matrix (nxm)
-     * @param S assignment matrix (nxm)
-     * @param prices prices per object (m)
-     * @param profits profits per person (n)
-     * @param lambda bidding threshold lambda
-     * @param epsilon bidding increment
      * @return true if assignment was made, false otherwise
      */
-    static bool forward(const MatrixType & a, Edges & E, Scalars & prices, Scalars & profits,
-                        Locks & lockedRows, Locks & lockedCols, Scalar & lambda, Scalar & epsilon)
+    bool forward(const MatrixType & a)
     {
 
         const size_t rows = a.rows();
@@ -219,7 +212,7 @@ class Solver
         for (size_t i = 0; i < rows; i++) // for the i-th row/person
         {
             // person already assigned?
-            if (lockedRows[i])
+            if (_locked_rows[i])
             {
                 continue;
             }
@@ -241,35 +234,35 @@ class Solver
 
             // find maximum profit i.e. j_i = arg max { a_ij - p_j} and second best
             // no possible assignment found?
-            if (!findForward(a, prices, i, v_i, w_i, a_i_ji, j_i))
+            if (!findForward(a, i, v_i, w_i, a_i_ji, j_i))
             {
                 continue;
             }
 
             assignmentInThisIterationFound = false;
 
-            const Scalar bid = a_i_ji - w_i + epsilon;
+            const Scalar bid = a_i_ji - w_i + _epsilon;
 
             //	P_i = w_i - E
-            profits[i] = w_i - epsilon; // set new profit for person
+            _profits[i] = w_i - _epsilon; // set new profit for person
 
             //	prices(j_i) = max(lambda, a(i,j_i) - w(i) + epsilon)
             // if lambda <= a_ij - w_i + E, add (i, j_i) to S
-            if (lambda <= bid)
+            if (_lambda <= bid)
             {
-                prices[j_i] = bid;
+                _prices[j_i] = bid;
                 // assignment was made, so lock row and col
-                lockedRows[i] = true;
-                lockedCols[j_i] = true;
+                _locked_rows[i] = true;
+                _locked_cols[j_i] = true;
 
                 bool newEdge = true;
 
                 // if j_i was assigned to different i' to begin, remove (i', j_i) from S
-                for (auto & e : E)
+                for (auto & e : _edges)
                 {
                     if (e.y == j_i) // change edge
                     {
-                        lockedRows[e.x] = false; // unlock row i'
+                        _locked_rows[e.x] = false; // unlock row i'
                         newEdge = false;
                         e.x = i;
                         e.v = a_i_ji;
@@ -279,13 +272,13 @@ class Solver
 
                 if (newEdge)
                 {
-                    E.emplace_back(i, j_i, a_i_ji);
+                    _edges.emplace_back(i, j_i, a_i_ji);
                 }
                 assignmentInThisIterationFound = true;
             }
             else
             {
-                prices[j_i] = lambda;
+                _prices[j_i] = _lambda;
                 assignmentInThisIterationFound = false;
             }
             assignmentFound = assignmentInThisIterationFound;
@@ -294,9 +287,8 @@ class Solver
         return assignmentFound;
     }
 
-    inline static const bool findReverse(const MatrixType & a, const Scalars & profits,
-                                         const size_t j, Scalar & b_j, Scalar & g_j,
-                                         Scalar & a_ij_j, size_t & i_j)
+    bool findReverse(const MatrixType & a, const size_t j, Scalar & b_j, Scalar & g_j,
+                     Scalar & a_ij_j, size_t & i_j)
     {
         const size_t rows = a.rows();
         bool assignmentFound = false;
@@ -308,7 +300,7 @@ class Solver
             {
                 continue;
             }
-            const Scalar diff = aij - profits[i];
+            const Scalar diff = aij - _profits[i];
             if (diff > b_j)
             {
                 // if there already was an entry found, this is the second best
@@ -331,18 +323,11 @@ class Solver
     }
 
     /**
-     * reverse cycle of auction algorithm
+     * @brief Reverse cycle of auction algorithm
      * @param a weight matrix (nxm)
-     * @param S assignment matrix (nxm)
-     * @param prices prices per object (m)
-     * @param profits profits per person (n)
-     * @param lambda bidding threshold lambda
-     * @param epsilon bidding increment
      * @return true if assignment was made, false otherwise
      */
-    static bool reverse(const MatrixType & a, Edges & E, Scalars & prices, Scalars & profits,
-                        Locks & lockedRows, Locks & lockedCols, Scalar & lambda,
-                        const Scalar & epsilon)
+    bool reverse(const MatrixType & a)
     {
         const size_t rows = a.rows();
         const size_t cols = a.cols();
@@ -354,12 +339,12 @@ class Solver
             bool assignmentInThisIterationFound = false;
 
             // object already assigned,  p_j > lambda ?
-            if (lockedCols[j])
+            if (_locked_cols[j])
             {
                 continue;
             }
 
-            if (!(prices[j] > lambda))
+            if (!(_prices[j] > _lambda))
             {
                 continue;
             }
@@ -375,7 +360,7 @@ class Solver
 
             // find maximum profit i.e. j_i = arg max { a_ij - p_j} and second best
             // no assignment found
-            if (!findReverse(a, profits, j, b_j, g_j, a_ij_j, i_j))
+            if (!findReverse(a, j, b_j, g_j, a_ij_j, i_j))
             {
                 continue;
             }
@@ -383,28 +368,28 @@ class Solver
             assignmentInThisIterationFound = false;
 
             // if b_j >= L + E, case 1:
-            if (b_j >= (lambda + epsilon))
+            if (b_j >= (_lambda + _epsilon))
             {
-                const Scalar diff = g_j - epsilon;         // G_j - E
-                const Scalar max = std::max(lambda, diff); //  max { L, G_j - E}
+                const Scalar diff = g_j - _epsilon;         // G_j - E
+                const Scalar max = std::max(_lambda, diff); //  max { L, G_j - E}
 
                 //	p_j = max { L, G_j - E}
-                prices[j] = max;
+                _prices[j] = max;
 
                 //	P_i_j = a_i_jj - max {L, G_j - E}
-                profits[i_j] = a_ij_j - max;
+                _profits[i_j] = a_ij_j - max;
 
-                lockedRows[i_j] = true;
-                lockedCols[j] = true;
+                _locked_rows[i_j] = true;
+                _locked_cols[j] = true;
 
                 bool newEdge = true;
 
                 // if j_i was assigned to different i' to begin, remove (i', j_i) from S
-                for (auto & e : E)
+                for (auto & e : _edges)
                 {
                     if (e.x == i_j) // change edge
                     {
-                        lockedCols[e.y] = false; // unlock row i'
+                        _locked_cols[e.y] = false; // unlock col i'
                         newEdge = false;
                         e.y = j;
                         e.v = a_ij_j;
@@ -414,34 +399,34 @@ class Solver
                 }
                 if (newEdge)
                 {
-                    E.emplace_back(i_j, j, a_ij_j);
+                    _edges.emplace_back(i_j, j, a_ij_j);
                 }
                 assignmentInThisIterationFound = true;
             }
             else // if B_j < L + E, case 2
             {
                 //	p_j = B_j - E
-                prices[j] = b_j - epsilon;
+                _prices[j] = b_j - _epsilon;
 
                 /** standard lambda scaling **/
                 size_t lowerThanLambda = 0;
-                Scalar newLambda = lambda;
+                Scalar newLambda = _lambda;
 
                 // if the number of objects k with p_k < lambda is bigger than (rows - cols)
                 for (size_t k = 0; k < cols; k++)
                 {
-                    if (prices[k] < lambda) // p_k < lambda
+                    if (_prices[k] < _lambda) // p_k < lambda
                     {
                         lowerThanLambda++;
-                        if (prices[k] < newLambda)
+                        if (_prices[k] < newLambda)
                         {
-                            newLambda = prices[k];
+                            newLambda = _prices[k];
                         }
                     }
                 }
                 if (lowerThanLambda >= (cols - rows))
                 {
-                    lambda = newLambda;
+                    _lambda = newLambda;
                 }
                 assignmentInThisIterationFound = false;
             }
@@ -455,26 +440,27 @@ class Solver
      * check if all persons are assigned
      * @return true if all persons are assigned, otherwise false
      */
-    static const bool areAllPersonsAssigned(const Locks & r)
+    bool areAllPersonsAssigned()
     {
-        return std::all_of(r.begin(), r.end(), [](bool const & value) { return value; });
+        return std::all_of(_locked_rows.begin(), _locked_rows.end(),
+                           [](bool const & value) { return value; });
     }
 
     /**
      * returns true if p_j <= lambda for all unassigned objects.
      *
-     * @param c locked columns
-     * @param prices prices of objects
-     * @param lambda bidding threshold
-     * @return true if all prices of unassigned objects are below lambda,
+     * @return true if all prices of unassigned objects are below or equal lambda,
      * otherwise false
      */
-    static const bool unassignedObjectsLTlambda(const Locks & c, const Scalars & prices,
-                                                const Scalar lambda)
+    bool unassignedObjectsLowerThanLambda()
     {
-        for (size_t j = 0; j < c.size(); ++j)
-            if (!c[j] && prices[j] > lambda)
+        for (size_t j = 0; j < _locked_cols.size(); ++j)
+        {
+            if (!_locked_cols[j] && _prices[j] > _lambda)
+            {
                 return false;
+            }
+        }
         return true;
     }
 };
