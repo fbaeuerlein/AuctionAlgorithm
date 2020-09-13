@@ -8,9 +8,11 @@
 #ifndef AUCTION_H_
 #define AUCTION_H_
 
-#include "../internal.h"
-#include "AuctionCommon.hxx"
+
+#define __AUCTION_EPSILON_MULTIPLIER 1e-5 // epsilon multiplier
+#define __AUCTION_INF 1e6                 // infinity for setting second best match
 #include "Matrix.hxx"
+#include "Edge.hxx"
 #include <cassert>
 
 //#define DEBUG_AUCTION
@@ -92,12 +94,17 @@ class Locks
 template <typename MatrixType = DenseEigenMatrix<double>>
 class Solver
 {
-  public:
+  private:
+    template <typename T>
+    using container_type = std::vector<T>;
+
     typedef typename MatrixType::scalar_t Scalar;
-    typedef typename AuctionCommon<Scalar>::Scalars Scalars;
-    typedef typename AuctionCommon<Scalar>::Indices Indices;
-    typedef typename AuctionCommon<Scalar>::Edge Edge;
-    typedef typename AuctionCommon<Scalar>::Edges Edges;
+
+  public:
+    using Edge = Edge<Scalar>;
+    using Scalars = container_type<Scalar>;
+    using Indices = container_type<size_t>;
+    using Edges = container_type<Edge>;
 
   private:
     Solver() = delete;
