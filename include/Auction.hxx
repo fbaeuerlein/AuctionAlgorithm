@@ -8,11 +8,10 @@
 #ifndef AUCTION_H_
 #define AUCTION_H_
 
-
 #define __AUCTION_EPSILON_MULTIPLIER 1e-5 // epsilon multiplier
 #define __AUCTION_INF 1e6                 // infinity for setting second best match
-#include "Matrix.hxx"
 #include "Edge.hxx"
+#include "Matrix.hxx"
 #include <cassert>
 
 //#define DEBUG_AUCTION
@@ -91,25 +90,35 @@ class Locks
 };
 
 } // namespace detail
+
+template <typename T>
+using container_type = std::vector<T>;
+
+template <typename Scalar>
+using Edges = container_type<Edge<Scalar>>;
+
+/**
+ * @brief
+ *
+ * @warning cols must be lower or equal to rows!
+ * @warning c_ij [0;1]
+ *
+ * @tparam DenseEigenMatrix<double>
+ */
 template <typename MatrixType = DenseEigenMatrix<double>>
 class Solver
 {
   private:
-    template <typename T>
-    using container_type = std::vector<T>;
-
     typedef typename MatrixType::scalar_t Scalar;
 
   public:
-    using Edge = Edge<Scalar>;
     using Scalars = container_type<Scalar>;
     using Indices = container_type<size_t>;
-    using Edges = container_type<Edge>;
+    using Edges = Edges<Scalar>;
+    using Edge = Edge<Scalar>;
 
-  private:
     Solver() = delete;
 
-  protected:
     typedef detail::Locks Locks;
     Solver(MatrixType const & matrix)
         : _matrix(matrix)
@@ -120,8 +129,10 @@ class Solver
         , _prices(matrix.cols(), .0)
         , _profits(matrix.rows(), 1.) // condition 3: initially set p_j >= lambda
     {
+        assert(matrix.cols() <= matrix.rows());
     }
 
+  protected:
     MatrixType _matrix;
     Locks _locked_rows, _locked_cols;
     Scalar _lambda, _epsilon;
@@ -129,34 +140,26 @@ class Solver
     Edges _edges; // refactor to use vector index as row/col index
 
   public:
-    /**
-     * solve the assignment problem with the auction algorithm
-     * use real-types as coefficients, otherwise scaling will not work properly!
-     * @param a nxm weight matrix of type Scalar
-     * @return vector of Edges which represent the assignments
-     */
-    static const Edges solve(const MatrixType & matrix)
+    Edges solve()
     {
-        Solver s(matrix);
-
         do
         {
             //		Step 1 (forward	auction cycle):
             //		Execute iterations of the forward auction algorithm until at least one
             //		more person becomes assigned. If there is an unassigned person left, go
             //		to step 2; else go to step 3.
-            while (s.forward())
+            while (forward())
                 ;
 
-            if (s.areAllPersonsAssigned())
+            if (areAllPersonsAssigned())
             {
                 //		Step 3 (reverse auction):
                 //		Execute successive iterations of the reverse auction algorithm until
                 // the 		algorithm terminates with p_j <= lambda for all unassigned objects j
                 while (true)
                 {
-                    s.reverse();
-                    if (s.unassignedObjectsLowerThanLambda())
+                    reverse();
+                    if (unassignedObjectsLowerThanLambda())
                     {
                         break;
                     }
@@ -171,13 +174,13 @@ class Solver
                 // least 		one more object becomes assigned or until we have p_j <=
                 // lambda for all 		unassigned objects. If there is an unassigned person
                 // left, go to step 1 else go to step 3
-                while (!s.reverse() || !s.unassignedObjectsLowerThanLambda())
+                while (!reverse() || !unassignedObjectsLowerThanLambda())
                     ; // reverse auction
             }
 
         } while (true);
 
-        return s._edges;
+        return _edges;
     }
 
   private:
@@ -276,6 +279,41 @@ class Solver
     //     return assignmentFound;
     // }
 
+    void updateEdgeRowOrAddEdge(size_t const & j_i, size_t const & i, Scalar const & a_i_ji)
+    {
+        auto it =
+            std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.y == j_i; });
+        if (it != _edges.end())
+        {
+            auto & edge = *it;
+            _locked_rows.unlock(edge.x); // unlock previous row
+            edge.x = i;
+            edge.v = a_i_ji;
+        }
+        else
+        {
+            _edges.emplace_back(i, j_i, a_i_ji);
+        }
+    }
+
+    void updateEdgeColumnOrAddEdge(size_t const & i_j, size_t const & j, Scalar const & a_ij_j)
+    {
+        auto it =
+            std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.x == i_j; });
+
+        // if j_i was assigned to different i' to begin, remove (i', j_i) from S
+        if (it != _edges.end())
+        {
+            auto & e = *it;
+            _locked_cols.unlock(e.y); // unlock col i'
+            e.y = j;
+            e.v = a_ij_j;
+        }
+        else
+        {
+            _edges.emplace_back(i_j, j, a_ij_j);
+        }
+    }
     /**
      * @brief Forward cycle of auction algorithm
      * @param a weight matrix (nxm)
@@ -331,25 +369,8 @@ class Solver
                 _locked_rows.lock(i);
                 _locked_cols.lock(j_i);
 
-                bool newEdge = true;
+                updateEdgeRowOrAddEdge(j_i, i, a_i_ji);
 
-                // if j_i was assigned to different i' to begin, remove (i', j_i) from S
-                for (auto & e : _edges)
-                {
-                    if (e.y == j_i) // change edge
-                    {
-                        _locked_rows.unlock(e.x); // unlock row i'
-                        newEdge = false;
-                        e.x = i;
-                        e.v = a_i_ji;
-                        break;
-                    }
-                }
-
-                if (newEdge)
-                {
-                    _edges.emplace_back(i, j_i, a_i_ji);
-                }
                 assignmentInThisIterationFound = true;
             }
             else
@@ -394,6 +415,30 @@ class Solver
             }
         }
         return assignmentFound;
+    }
+
+    void updateLambda()
+    {
+        /** standard lambda scaling **/
+        size_t lowerThanLambda = 0;
+        Scalar newLambda = _lambda;
+
+        // if the number of objects k with p_k < lambda is bigger than (rows - cols)
+        for (size_t k = 0; k < _matrix.cols(); k++)
+        {
+            if (_prices[k] < _lambda) // p_k < lambda
+            {
+                lowerThanLambda++;
+                if (_prices[k] < newLambda)
+                {
+                    newLambda = _prices[k];
+                }
+            }
+        }
+        if (lowerThanLambda >= (_matrix.rows() - _matrix.cols()))
+        {
+            _lambda = newLambda;
+        }
     }
 
     /**
@@ -453,25 +498,8 @@ class Solver
                 _locked_rows.lock(i_j);
                 _locked_cols.lock(j);
 
-                bool newEdge = true;
+                updateEdgeColumnOrAddEdge(i_j, j, a_ij_j);
 
-                // if j_i was assigned to different i' to begin, remove (i', j_i) from S
-                for (auto & e : _edges)
-                {
-                    if (e.x == i_j) // change edge
-                    {
-                        _locked_cols.unlock(e.y); // unlock col i'
-                        newEdge = false;
-                        e.y = j;
-                        e.v = a_ij_j;
-
-                        break;
-                    }
-                }
-                if (newEdge)
-                {
-                    _edges.emplace_back(i_j, j, a_ij_j);
-                }
                 assignmentInThisIterationFound = true;
             }
             else // if B_j < L + E, case 2
@@ -479,27 +507,9 @@ class Solver
                 //	p_j = B_j - E
                 _prices[j] = b_j - _epsilon;
 
-                /** standard lambda scaling **/
-                size_t lowerThanLambda = 0;
-                Scalar newLambda = _lambda;
-
-                // if the number of objects k with p_k < lambda is bigger than (rows - cols)
-                for (size_t k = 0; k < _matrix.cols(); k++)
-                {
-                    if (_prices[k] < _lambda) // p_k < lambda
-                    {
-                        lowerThanLambda++;
-                        if (_prices[k] < newLambda)
-                        {
-                            newLambda = _prices[k];
-                        }
-                    }
-                }
-                if (lowerThanLambda >= (_matrix.cols() - _matrix.rows()))
-                {
-                    _lambda = newLambda;
-                }
                 assignmentInThisIterationFound = false;
+
+                updateLambda();
             }
             assignmentFound = assignmentInThisIterationFound;
         }
@@ -532,5 +542,33 @@ class Solver
     }
 };
 
+/**
+ * solve the assignment problem with the auction algorithm
+ * use real-types as coefficients, otherwise scaling will not work properly!
+ * @param a nxm weight matrix of type Scalar
+ * @return vector of Edges which represent the assignments
+ */
+template <typename Scalar = double, int Rows = Eigen::Dynamic, int Cols = Eigen::Dynamic,
+          int Options = 0, int MaxRows = Eigen::Dynamic, int MaxCols = Eigen::Dynamic>
+Edges<Scalar> solve(Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols> const & matrix)
+{
+    Solver<DenseEigenMatrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> s(matrix);
+    return s.solve();
+}
+
+/**
+ * solve the assignment problem with the auction algorithm
+ * use real-types as coefficients, otherwise scaling will not work properly!
+ * @param a nxm weight matrix of type Scalar
+ * @return vector of Edges which represent the assignments
+ */
+template <typename Scalar = double, int Rows = Eigen::Dynamic, int Cols = Eigen::Dynamic,
+          int Options = 0, int MaxRows = Eigen::Dynamic, int MaxCols = Eigen::Dynamic>
+Edges<Scalar>
+solve(Eigen::Transpose<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> const & matrix)
+{
+    Solver<DenseEigenMatrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols>> s(matrix);
+    return s.solve();
+}
 } // namespace Auction
 #endif /* AUCTION_H_ */

@@ -2,13 +2,9 @@
 #include <auction>
 
 #include <random>
-using namespace Auction;
 
-typedef double Scalar;
-
-typedef Eigen::Matrix<Scalar, -1, -1> WeightMatrix;
-
-const Scalar objFuncValue(const typename Solver<>::Edges & edges )
+template<typename Scalar>
+const Scalar objFuncValue(const typename Auction::Edges<Scalar> & edges )
 {
 	Scalar val = 0.;
 	for ( auto & e : edges)
@@ -19,7 +15,7 @@ const Scalar objFuncValue(const typename Solver<>::Edges & edges )
 
 int main(int argc, char **argv)
 {
-	const size_t rows = 1000, cols = 1000;
+	const size_t rows = 100, cols = 100;
 
 	// assert that rows <= cols and coefficients are between 0 and 1!
 	Eigen::MatrixXd m = Eigen::MatrixXd::Random(rows, cols);
@@ -29,8 +25,7 @@ int main(int argc, char **argv)
 		for ( size_t j = 0; j < cols; ++j )
 			m(i, j) = std::abs(m(i, j));
 
-	m /= m.maxCoeff(); // normalize to 0..1
-
+	m.normalize();
 	// std::cout << m << std::endl;
 
 	// create sparse matrix from dense
@@ -40,7 +35,7 @@ int main(int argc, char **argv)
 
 	// single threaded computation and some time measurement
 	// TODO check if implicit conversion is not possible!
-	auto solution = Solver<>::solve(m);
+	auto solution = Auction::solve<>(m);
 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
 
 	// for ( auto & e: solution )

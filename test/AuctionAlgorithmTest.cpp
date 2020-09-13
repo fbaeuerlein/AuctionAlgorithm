@@ -51,11 +51,23 @@ TEST(DISABLED_test_data, data_01) {
 
   auto const maxCoefficient = m.maxCoeff();
 
-  auto const solution = Solver<>::solve(m.transpose());
+  // minimization problem to maximization problem
+  for ( size_t i = 0; i < m.rows(); ++i )
+    for ( size_t j = 0; j < m.cols(); ++j)
+      m(i,j) = maxCoefficient - m(i,j);
+
+  auto solution = Auction::solve<>(m.transpose());
   auto x = objectiveFunctionValue<>(solution);
-  EXPECT_EQ(118.1, x);
-  std::cout << (m) << std::endl;
+  // // EXPECT_EQ(118.1, x);
+  // std::cout << (m) << std::endl;
   printEdges<DenseEigenMatrix<double>>(solution);
+  typedef decltype(solution)::value_type Edge;
+
+  std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
+  EXPECT_EQ(0, solution[1].x);
+  EXPECT_EQ(1, solution[3].x);
+  EXPECT_EQ(2, solution[0].x);
+  EXPECT_EQ(3, solution[2].x);  
 }
 
 TEST(test_data, data_02) {
@@ -80,8 +92,7 @@ TEST(test_data, data_02) {
     for ( size_t j = 0; j < m.cols(); ++j )
         m(i, j) = 1. - m(i, j);
 
-  auto solution = Solver<>::solve(m.normalized());
-  auto x = objectiveFunctionValue<>(solution);
+  auto solution = Auction::solve<>(m.normalized());
   typedef typename Solver<>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
   EXPECT_EQ(3, solution[0].y);
@@ -112,7 +123,7 @@ TEST(test_data, data_03) {
   //   for ( size_t j = 0; j < m.cols(); ++j )
   //       m(i, j) = 1. - m(i, j);
 
-  auto solution = Solver<>::solve(std::move(m));
+  auto solution = Auction::solve<>(m);
   auto x = objectiveFunctionValue<>(solution);
   typedef typename Solver<>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
