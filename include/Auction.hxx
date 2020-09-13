@@ -10,6 +10,7 @@
 
 #include "../internal.h"
 #include "AuctionCommon.hxx"
+#include <cassert>
 
 //#define DEBUG_AUCTION
 
@@ -21,10 +22,74 @@ class Solver
 {
   public:
     typedef typename AuctionCommon<Scalar>::Scalars Scalars;
-    typedef typename AuctionCommon<Scalar>::Locks Locks;
     typedef typename AuctionCommon<Scalar>::Indices Indices;
     typedef typename AuctionCommon<Scalar>::Edge Edge;
     typedef typename AuctionCommon<Scalar>::Edges Edges;
+
+    class Locks
+    {
+        public:
+        Locks(size_t const & size) 
+            : _locks(size, false)
+        {}
+
+        Locks() = delete;
+
+        /**
+         * @brief locks the i-th flag
+         * 
+         * @param index index of the flag
+         */
+        void lock(size_t const & index ) 
+        { 
+            assert(index < _locks.size());
+            _locks[index] = true; 
+            _locked++;
+        }
+
+        /**
+         * @brief unlocks the i-th flag
+         * 
+         * @param index index of the flag
+         */
+        void unlock(size_t const & index ) 
+        { 
+            assert(index < _locks.size());
+            _locks[index] = false; 
+            _locked--;
+        }
+
+        /**
+         * @brief indicates that the i-th flag is set locked
+         * 
+         * @param index index = i-th flag
+         * @return true if flag is set locked
+         * @return false otherwise
+         */
+        bool is_locked(size_t const & index) 
+        {
+            assert(index < _locks.size()); 
+            return _locks[index]; 
+        }
+
+        /**
+         * @brief indicates that all flags are locked
+         * 
+         * @return true if all flags are locked
+         * @return false otherwise
+         */
+        bool all_locked() const { return _locked == _locks.size(); }
+
+        /**
+         * @brief returns the number of the lock flags
+         * 
+         * @return size_t number of the flags
+         */
+        size_t size() const { return _locks.size(); }
+        private:
+        std::vector<bool> _locks;   ///< storage of the lock flags
+        size_t _locked{0};          ///< number of locked entries
+    };
 
   private:
     Solver() = delete;
@@ -33,8 +98,8 @@ class Solver
     Solver(size_t const & rows, size_t const & cols)
         : _rows(rows)
         , _cols(cols)
-        , _locked_rows(rows, false)
-        , _locked_cols(cols, false)
+        , _locked_rows(rows)
+        , _locked_cols(cols)
         , _lambda(0.)
         , _epsilon(__AUCTION_EPSILON_MULTIPLIER / cols)
         , _prices(cols, .0)
@@ -47,6 +112,8 @@ class Solver
     Scalar _lambda, _epsilon;
     Scalars _prices, _profits;
     Edges _edges; // refactor to use vector index as row/col index
+
+
 
   public:
     /**
@@ -212,7 +279,7 @@ class Solver
         for (size_t i = 0; i < rows; i++) // for the i-th row/person
         {
             // person already assigned?
-            if (_locked_rows[i])
+            if (_locked_rows.is_locked(i))
             {
                 continue;
             }
@@ -252,8 +319,8 @@ class Solver
             {
                 _prices[j_i] = bid;
                 // assignment was made, so lock row and col
-                _locked_rows[i] = true;
-                _locked_cols[j_i] = true;
+                _locked_rows.lock(i);
+                _locked_cols.lock(j_i);
 
                 bool newEdge = true;
 
@@ -262,7 +329,7 @@ class Solver
                 {
                     if (e.y == j_i) // change edge
                     {
-                        _locked_rows[e.x] = false; // unlock row i'
+                        _locked_rows.unlock(e.x); // unlock row i'
                         newEdge = false;
                         e.x = i;
                         e.v = a_i_ji;
@@ -339,7 +406,7 @@ class Solver
             bool assignmentInThisIterationFound = false;
 
             // object already assigned,  p_j > lambda ?
-            if (_locked_cols[j])
+            if (_locked_cols.is_locked(j))
             {
                 continue;
             }
@@ -379,8 +446,8 @@ class Solver
                 //	P_i_j = a_i_jj - max {L, G_j - E}
                 _profits[i_j] = a_ij_j - max;
 
-                _locked_rows[i_j] = true;
-                _locked_cols[j] = true;
+                _locked_rows.lock(i_j);
+                _locked_cols.lock(j);
 
                 bool newEdge = true;
 
@@ -389,7 +456,7 @@ class Solver
                 {
                     if (e.x == i_j) // change edge
                     {
-                        _locked_cols[e.y] = false; // unlock col i'
+                        _locked_cols.unlock(e.y); // unlock col i'
                         newEdge = false;
                         e.y = j;
                         e.v = a_ij_j;
@@ -442,8 +509,7 @@ class Solver
      */
     bool areAllPersonsAssigned()
     {
-        return std::all_of(_locked_rows.begin(), _locked_rows.end(),
-                           [](bool const & value) { return value; });
+        return _locked_rows.all_locked();
     }
 
     /**
@@ -456,7 +522,7 @@ class Solver
     {
         for (size_t j = 0; j < _locked_cols.size(); ++j)
         {
-            if (!_locked_cols[j] && _prices[j] > _lambda)
+            if (!_locked_cols.is_locked(j) && _prices[j] > _lambda)
             {
                 return false;
             }
