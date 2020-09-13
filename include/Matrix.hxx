@@ -25,6 +25,7 @@ class DenseEigenMatrix
 {
   public:
     typedef Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols> matrix_t;
+    typedef Scalar scalar_t;
 
     // use template to also support transpose return types
     template<typename T>

@@ -4,9 +4,9 @@
 
 using namespace Auction;
 
-template <typename T>
-T objectiveFunctionValue(typename Solver<T>::Edges const &edges) {
-  T result = 0;
+template <typename T = DenseEigenMatrix<double>>
+auto objectiveFunctionValue(typename Solver<T>::Edges const &edges) -> typename T::scalar_t{
+  typename T::scalar_t result = 0;
   for (auto const &e : edges) {
     result += e.v;
   }
@@ -51,11 +51,11 @@ TEST(DISABLED_test_data, data_01) {
 
   auto const maxCoefficient = m.maxCoeff();
 
-  auto const solution = Solver<double>::solve(m.transpose());
-  auto x = objectiveFunctionValue<double>(solution);
+  auto const solution = Solver<>::solve(m.transpose());
+  auto x = objectiveFunctionValue<>(solution);
   EXPECT_EQ(118.1, x);
   std::cout << (m) << std::endl;
-  printEdges<double>(solution);
+  printEdges<DenseEigenMatrix<double>>(solution);
 }
 
 TEST(test_data, data_02) {
@@ -80,9 +80,9 @@ TEST(test_data, data_02) {
     for ( size_t j = 0; j < m.cols(); ++j )
         m(i, j) = 1. - m(i, j);
 
-  auto solution = Solver<double>::solve(m.normalized());
-  auto x = objectiveFunctionValue<double>(solution);
-  typedef typename Solver<double>::Edge Edge;
+  auto solution = Solver<>::solve(m.normalized());
+  auto x = objectiveFunctionValue<>(solution);
+  typedef typename Solver<>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
   EXPECT_EQ(3, solution[0].y);
   EXPECT_EQ(2, solution[1].y);
@@ -112,9 +112,9 @@ TEST(test_data, data_03) {
   //   for ( size_t j = 0; j < m.cols(); ++j )
   //       m(i, j) = 1. - m(i, j);
 
-  auto solution = Solver<double>::solve(std::move(m));
-  auto x = objectiveFunctionValue<double>(solution);
-  typedef typename Solver<double>::Edge Edge;
+  auto solution = Solver<>::solve(std::move(m));
+  auto x = objectiveFunctionValue<>(solution);
+  typedef typename Solver<>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
   EXPECT_EQ(0, solution[0].y);
   EXPECT_EQ(2, solution[1].y);

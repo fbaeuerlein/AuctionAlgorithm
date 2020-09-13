@@ -8,7 +8,7 @@ typedef double Scalar;
 
 typedef Eigen::Matrix<Scalar, -1, -1> WeightMatrix;
 
-const Scalar objFuncValue(const typename Solver<Scalar>::Edges & edges )
+const Scalar objFuncValue(const typename Solver<>::Edges & edges )
 {
 	Scalar val = 0.;
 	for ( auto & e : edges)
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 
 	// single threaded computation and some time measurement
 	// TODO check if implicit conversion is not possible!
-	auto solution = Solver<double>::solve(m);
+	auto solution = Solver<>::solve(m);
 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
 
 	// for ( auto & e: solution )

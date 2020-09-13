@@ -89,34 +89,33 @@ class Locks
 };
 
 } // namespace detail
-template <typename Scalar = double,
-          typename MatrixType = DenseEigenMatrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>
+template <typename MatrixType = DenseEigenMatrix<double>>
 class Solver
 {
   public:
+    typedef typename MatrixType::scalar_t Scalar;
     typedef typename AuctionCommon<Scalar>::Scalars Scalars;
     typedef typename AuctionCommon<Scalar>::Indices Indices;
     typedef typename AuctionCommon<Scalar>::Edge Edge;
     typedef typename AuctionCommon<Scalar>::Edges Edges;
-    
+
   private:
     Solver() = delete;
 
   protected:
     typedef detail::Locks Locks;
-    Solver(size_t const & rows, size_t const & cols)
-        : _rows(rows)
-        , _cols(cols)
-        , _locked_rows(rows)
-        , _locked_cols(cols)
+    Solver(MatrixType const & matrix)
+        : _matrix(matrix)
+        , _locked_rows(matrix.rows())
+        , _locked_cols(matrix.cols())
         , _lambda(0.)
-        , _epsilon(__AUCTION_EPSILON_MULTIPLIER / cols)
-        , _prices(cols, .0)
-        , _profits(rows, 1.) // condition 3: initially set p_j >= lambda
+        , _epsilon(__AUCTION_EPSILON_MULTIPLIER / matrix.cols())
+        , _prices(matrix.cols(), .0)
+        , _profits(matrix.rows(), 1.) // condition 3: initially set p_j >= lambda
     {
     }
 
-    size_t _rows, _cols;
+    MatrixType _matrix;
     Locks _locked_rows, _locked_cols;
     Scalar _lambda, _epsilon;
     Scalars _prices, _profits;
@@ -129,9 +128,9 @@ class Solver
      * @param a nxm weight matrix of type Scalar
      * @return vector of Edges which represent the assignments
      */
-    static const Edges solve(const MatrixType & a)
+    static const Edges solve(const MatrixType & matrix)
     {
-        Solver s(a.rows(), a.cols());
+        Solver s(matrix);
 
         do
         {
@@ -139,7 +138,7 @@ class Solver
             //		Execute iterations of the forward auction algorithm until at least one
             //		more person becomes assigned. If there is an unassigned person left, go
             //		to step 2; else go to step 3.
-            while (s.forward(a))
+            while (s.forward())
                 ;
 
             if (s.areAllPersonsAssigned())
@@ -149,7 +148,7 @@ class Solver
                 // the 		algorithm terminates with p_j <= lambda for all unassigned objects j
                 while (true)
                 {
-                    s.reverse(a);
+                    s.reverse();
                     if (s.unassignedObjectsLowerThanLambda())
                     {
                         break;
@@ -165,7 +164,7 @@ class Solver
                 // least 		one more object becomes assigned or until we have p_j <=
                 // lambda for all 		unassigned objects. If there is an unassigned person
                 // left, go to step 1 else go to step 3
-                while (!s.reverse(a) || !s.unassignedObjectsLowerThanLambda())
+                while (!s.reverse() || !s.unassignedObjectsLowerThanLambda())
                     ; // reverse auction
             }
 
@@ -186,16 +185,13 @@ class Solver
      * @param j_i best entry
      * @return true if assignment was found, otherwise false
      */
-    bool findForward(MatrixType const & a, const size_t i, Scalar & v_i, Scalar & w_i,
-                     Scalar & a_i_ji, size_t & j_i)
+    bool findForward(const size_t i, Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
     {
-        const size_t cols = a.cols();
-
         bool assignmentFound = false;
 
-        for (size_t j = 0; j < cols; j++) // for the j-th column
+        for (size_t j = 0; j < _matrix.cols(); j++) // for the j-th column
         {
-            const Scalar aij = a(i, j);
+            const Scalar aij = _matrix(i, j);
             if (aij == 0)
             {
                 continue;
@@ -278,13 +274,11 @@ class Solver
      * @param a weight matrix (nxm)
      * @return true if assignment was made, false otherwise
      */
-    bool forward(const MatrixType & a)
+    bool forward()
     {
-
-        const size_t rows = a.rows();
         bool assignmentFound = false;
 
-        for (size_t i = 0; i < rows; i++) // for the i-th row/person
+        for (size_t i = 0; i < _matrix.rows(); i++) // for the i-th row/person
         {
             // person already assigned?
             if (_locked_rows.is_locked(i))
@@ -309,7 +303,7 @@ class Solver
 
             // find maximum profit i.e. j_i = arg max { a_ij - p_j} and second best
             // no possible assignment found?
-            if (!findForward(a, i, v_i, w_i, a_i_ji, j_i))
+            if (!findForward(i, v_i, w_i, a_i_ji, j_i))
             {
                 continue;
             }
@@ -362,15 +356,13 @@ class Solver
         return assignmentFound;
     }
 
-    bool findReverse(const MatrixType & a, const size_t j, Scalar & b_j, Scalar & g_j,
-                     Scalar & a_ij_j, size_t & i_j)
+    bool findReverse(const size_t j, Scalar & b_j, Scalar & g_j, Scalar & a_ij_j, size_t & i_j)
     {
-        const size_t rows = a.rows();
         bool assignmentFound = false;
 
-        for (size_t i = 0; i < rows; i++) // for the j-th column
+        for (size_t i = 0; i < _matrix.rows(); i++) // for the j-th column
         {
-            const Scalar aij = a(i, j);
+            const Scalar aij = _matrix(i, j);
             if (aij == 0)
             {
                 continue;
@@ -402,14 +394,11 @@ class Solver
      * @param a weight matrix (nxm)
      * @return true if assignment was made, false otherwise
      */
-    bool reverse(const MatrixType & a)
+    bool reverse()
     {
-        const size_t rows = a.rows();
-        const size_t cols = a.cols();
-
         bool assignmentFound = false;
 
-        for (size_t j = 0; j < cols; j++) // for the j-th column (objects)
+        for (size_t j = 0; j < _matrix.cols(); j++) // for the j-th column (objects)
         {
             bool assignmentInThisIterationFound = false;
 
@@ -435,7 +424,7 @@ class Solver
 
             // find maximum profit i.e. j_i = arg max { a_ij - p_j} and second best
             // no assignment found
-            if (!findReverse(a, j, b_j, g_j, a_ij_j, i_j))
+            if (!findReverse(j, b_j, g_j, a_ij_j, i_j))
             {
                 continue;
             }
@@ -488,7 +477,7 @@ class Solver
                 Scalar newLambda = _lambda;
 
                 // if the number of objects k with p_k < lambda is bigger than (rows - cols)
-                for (size_t k = 0; k < cols; k++)
+                for (size_t k = 0; k < _matrix.cols(); k++)
                 {
                     if (_prices[k] < _lambda) // p_k < lambda
                     {
@@ -499,7 +488,7 @@ class Solver
                         }
                     }
                 }
-                if (lowerThanLambda >= (cols - rows))
+                if (lowerThanLambda >= (_matrix.cols() - _matrix.rows()))
                 {
                     _lambda = newLambda;
                 }
