@@ -1,4 +1,7 @@
 {
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools", 
-    "clang-tidy.buildPath": "build"
+    "clang-tidy.buildPath": "build",
+    "files.associations": {
+        "iostream": "cpp"
+    }
 }

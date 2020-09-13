@@ -1,11 +1,11 @@
-#include <Auction.h>
+#include <auction>
 #include <gtest/gtest.h>
 #include <algorithm>
 
-using namespace LSAP;
+using namespace Auction;
 
 template <typename T>
-T objectiveFunctionValue(typename Auction<T>::Edges const &edges) {
+T objectiveFunctionValue(typename Solver<T>::Edges const &edges) {
   T result = 0;
   for (auto const &e : edges) {
     result += e.v;
@@ -22,7 +22,7 @@ T objectiveFunctionValue(typename Auction<T>::Edges const &edges) {
 //   return result;
 // }
 
-template <typename T> void printEdges(typename Auction<T>::Edges const &edges) {
+template <typename T> void printEdges(typename Solver<T>::Edges const &edges) {
   for (auto const &e : edges) {
     std::cout << "(" << e.x << ", " << e.y << ") = " << e.v << std::endl;
     ;
@@ -51,7 +51,7 @@ TEST(DISABLED_test_data, data_01) {
 
   auto const maxCoefficient = m.maxCoeff();
 
-  auto const solution = Auction<double>::solve(m.transpose());
+  auto const solution = Solver<double>::solve(m.transpose());
   auto x = objectiveFunctionValue<double>(solution);
   EXPECT_EQ(118.1, x);
   std::cout << (m) << std::endl;
@@ -80,9 +80,9 @@ TEST(test_data, data_02) {
     for ( size_t j = 0; j < m.cols(); ++j )
         m(i, j) = 1. - m(i, j);
 
-  auto solution = Auction<double>::solve(m.normalized());
+  auto solution = Solver<double>::solve(m.normalized());
   auto x = objectiveFunctionValue<double>(solution);
-  typedef typename Auction<double>::Edge Edge;
+  typedef typename Solver<double>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
   EXPECT_EQ(3, solution[0].y);
   EXPECT_EQ(2, solution[1].y);
@@ -112,9 +112,9 @@ TEST(test_data, data_03) {
   //   for ( size_t j = 0; j < m.cols(); ++j )
   //       m(i, j) = 1. - m(i, j);
 
-  auto solution = Auction<double>::solve(m.normalized());
+  auto solution = Solver<double>::solve(m.normalized());
   auto x = objectiveFunctionValue<double>(solution);
-  typedef typename Auction<double>::Edge Edge;
+  typedef typename Solver<double>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
   EXPECT_EQ(0, solution[0].y);
   EXPECT_EQ(2, solution[1].y);

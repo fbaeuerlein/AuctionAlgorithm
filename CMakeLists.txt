@@ -3,11 +3,10 @@ cmake_minimum_required(VERSION 3.0)
 project(AuctionAlgorithm)
 
 add_subdirectory(test)
-aux_source_directory(. SRC_LIST)
 
-include_directories(./external/)
+include_directories(./external/eigen/ ./include/)
 
-add_executable(${PROJECT_NAME} ${SRC_LIST})
+add_executable(${PROJECT_NAME} LSAP.cpp)
 target_link_libraries(${PROJECT_NAME} pthread)
 
 if(CMAKE_COMPILER_IS_GNUCXX)

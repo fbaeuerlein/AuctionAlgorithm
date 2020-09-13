@@ -9,20 +9,20 @@
 #define AUCTION_H_
 
 #include "../internal.h"
-#include "AuctionCommon.h"
+#include "AuctionCommon.hxx"
 
 //#define DEBUG_AUCTION
 
-namespace LSAP
+namespace Auction
 {
 
-template<typename Scalar = double, typename MatrixType = Eigen::Matrix<Scalar, -1, -1> >
-class Auction
+template <typename Scalar = double, typename MatrixType = Eigen::Matrix<Scalar, -1, -1>>
+class Solver
 {
   private:
-    Auction() = delete;
+    Solver() = delete;
 
-    virtual ~Auction() = delete;
+    virtual ~Solver() = delete;
 
   public:
     typedef typename AuctionCommon<Scalar>::Scalars Scalars;
@@ -62,44 +62,38 @@ class Auction
             while (forward(a, E, prices, profits, lockedRows, lockedCols, lambda, epsilon))
                 ;
 
-            if (!AuctionCommon<Scalar>::allPersonsAssigned(lockedRows))
+            if (!Solver<Scalar>::areAllPersonsAssigned(lockedRows))
             {
 
                 //		Step 2 (reverse auction cycle):
                 //		Execute several iterations of the reverse auction algorithm until at
-                //least 		one more object becomes assigned or until we have p_j <= lambda for all
-                //		unassigned objects. If there is an unassigned person left, go to step
-                //1 		else go to step 3
+                // least 		one more object becomes assigned or until we have p_j <=
+                // lambda for all 		unassigned objects. If there is an unassigned person
+                // left, go to step 1 else go to step 3
                 while (
                     !reverse(a, E, prices, profits, lockedRows, lockedCols, lambda, epsilon) ||
-                    !AuctionCommon<Scalar>::unassignedObjectsLTlambda(lockedCols, prices, lambda))
+                    !Solver<Scalar>::unassignedObjectsLTlambda(lockedCols, prices, lambda))
                     ; // reverse auction
             }
 
-            if (AuctionCommon<Scalar>::allPersonsAssigned(lockedRows))
+            if (Solver<Scalar>::areAllPersonsAssigned(lockedRows))
             {
                 //		Step 3 (reverse auction):
                 //		Execute successive iterations of the reverse auction algorithm until
-                //the 		algorithm terminates with p_j <= lambda for all unassigned objects j
+                // the 		algorithm terminates with p_j <= lambda for all unassigned objects j
                 while (true)
                 {
                     reverse(a, E, prices, profits, lockedRows, lockedCols, lambda, epsilon);
-                    if (AuctionCommon<Scalar>::unassignedObjectsLTlambda(lockedCols, prices,
-                                                                         lambda))
+                    if (Solver<Scalar>::unassignedObjectsLTlambda(lockedCols, prices, lambda))
+                    {
                         break;
+                    }
                 }
                 break;
             }
 
         } while (true);
 
-#ifdef DEBUG_AUCTION
-        for (auto i : E)
-            std::cout << i.x << ", " << i.y << " => " << prices[i.y] + profits[i.x]
-                      << " a = " << a(i.x, i.y) << std::endl;
-        PRINTVECTOR(prices)
-        PRINTVECTOR(profits)
-#endif
         return E;
     }
 
@@ -128,13 +122,17 @@ class Auction
         {
             const Scalar aij = a(i, j);
             if (aij == 0)
+            {
                 continue;
+            }
             const Scalar diff = aij - prices[j];
             if (diff > v_i)
             {
                 // if there already was an entry found, this is the second best
                 if (assignmentFound)
+                {
                     w_i = v_i;
+                }
 
                 v_i = diff;
                 j_i = j;
@@ -142,7 +140,9 @@ class Auction
                 assignmentFound = true;
             }
             if (diff > w_i && j_i != j)
+            {
                 w_i = diff;
+            }
             // if no entry is bigger than v_i, check if there's still a bigger second best entry
         }
         return assignmentFound;
@@ -218,20 +218,22 @@ class Auction
 
         for (size_t i = 0; i < rows; i++) // for the i-th row/person
         {
-            bool assignmentInThisIterationFound = false;
-
             // person already assigned?
             if (lockedRows[i])
             {
                 continue;
             }
+
+            bool assignmentInThisIterationFound = false;
+
             // find an unassigned person i, its best object j_i
             // j_i = argmax {a_ij - p_j} for j in A(i) ( A(i) are the set of edges of the i-th row )
             // if a(i,j) = 0. it is not a valid edge
             size_t j_i = 0;
 
-            //	v_i = max { a_ij - p_j} for j in A(i)				// maximum profit for person
-            //i
+            //	v_i = max { a_ij - p_j} for j in A(i)				// maximum profit
+            // for person
+            // i
             //  v_i was already found = v_i
             //	w_i = max { a_ij - p_j} for j in A(i) and j != j_i  // second best profit
             //	if j_i is the only entry in A(i), w_i = - inf       // there's no second best profit
@@ -280,7 +282,6 @@ class Auction
                     E.emplace_back(i, j_i, a_i_ji);
                 }
                 assignmentInThisIterationFound = true;
-
             }
             else
             {
@@ -375,16 +376,16 @@ class Auction
             // find maximum profit i.e. j_i = arg max { a_ij - p_j} and second best
             // no assignment found
             if (!findReverse(a, profits, j, b_j, g_j, a_ij_j, i_j))
-			{
+            {
                 continue;
-			}
-			
+            }
+
             assignmentInThisIterationFound = false;
 
             // if b_j >= L + E, case 1:
             if (b_j >= (lambda + epsilon))
             {
-                const Scalar diff = g_j - epsilon; // G_j - E
+                const Scalar diff = g_j - epsilon;         // G_j - E
                 const Scalar max = std::max(lambda, diff); //  max { L, G_j - E}
 
                 //	p_j = max { L, G_j - E}
@@ -439,18 +440,44 @@ class Auction
                     }
                 }
                 if (lowerThanLambda >= (cols - rows))
-				{
+                {
                     lambda = newLambda;
-				}
+                }
                 assignmentInThisIterationFound = false;
             }
-			assignmentFound = assignmentInThisIterationFound;
+            assignmentFound = assignmentInThisIterationFound;
         }
         return assignmentFound;
     }
 
-  private:
+  protected: // enable testing of private methods via inheritance
+    /**
+     * check if all persons are assigned
+     * @return true if all persons are assigned, otherwise false
+     */
+    static const bool areAllPersonsAssigned(const Locks & r)
+    {
+        return std::all_of(r.begin(), r.end(), [](bool const & value) { return value; });
+    }
+
+    /**
+     * returns true if p_j <= lambda for all unassigned objects.
+     *
+     * @param c locked columns
+     * @param prices prices of objects
+     * @param lambda bidding threshold
+     * @return true if all prices of unassigned objects are below lambda,
+     * otherwise false
+     */
+    static const bool unassignedObjectsLTlambda(const Locks & c, const Scalars & prices,
+                                                const Scalar lambda)
+    {
+        for (size_t j = 0; j < c.size(); ++j)
+            if (!c[j] && prices[j] > lambda)
+                return false;
+        return true;
+    }
 };
 
-} /* namespace LSAP */
+} // namespace Auction
 #endif /* AUCTION_H_ */

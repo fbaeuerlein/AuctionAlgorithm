@@ -9,57 +9,27 @@
 #define AUCTIONCOMMON_H_
 
 #include "../internal.h"
-
-namespace LSAP
+#include "types.hxx"
+namespace Auction
 {
 
 template <typename Scalar = double>
 class AuctionCommon
 {
+  private:
+    template <typename T>
+    using container_type = std::vector<T>;
+
   public:
-    struct Edge
-    {
-		Edge(size_t x_, size_t y_, Scalar v_ ) : x(x_), y(y_), v(v_) {}
-        Edge() = default;
-        size_t x;
-        size_t y;
-        Scalar v;
-    };
+    using Edge = Edge<Scalar>;
+    using BidResult = BidResult<Scalar>;
 
-    typedef typename std::vector<Scalar> Scalars;
-    typedef typename std::vector<bool> Locks;
-    typedef typename std::vector<size_t> Indices;
-    typedef typename std::vector<Edge> Edges;
-    typedef typename Eigen::Matrix<Scalar, -1, -1> WeightMatrix;
-
-    class BidResult
-    {
-
-      public:
-        BidResult() = default;
-
-        BidResult(const size_t idx, const size_t bestIdx, const Scalar bestBid,
-                  const Scalar secondBestBid, const Scalar bestMatrixValue)
-            : index(idx)
-            , bestIndex(bestIdx)
-            , bestBid(bestBid)
-            , secondBestBid(secondBestBid)
-            , bestMatrixValue(bestMatrixValue)
-            , assignmentFound(true)
-        {
-        }
-
-        virtual ~BidResult() {}
-
-        // set by thread
-        size_t index{0};                     // index of examined row or column
-        size_t bestIndex{0};                 // index of best entry
-        Scalar bestBid{0}, secondBestBid{0}; // corresponding bids (w_i, v_i)
-        Scalar bestMatrixValue{0};           // a_ij
-        bool assignmentFound{false};         // assignment found ?
-    };
-
-    typedef typename std::vector<BidResult> BidResults;
+    using Scalars = container_type<Scalar>;
+    using Locks = container_type<bool>;
+    using Indices = container_type<size_t>;
+    using Edges = container_type<Edge>;
+    using BidResults = container_type<BidResult>;
+    using WeightMatrix = Eigen::Matrix<Scalar, -1, -1>;
 
     /**
      * gauss-seidel forward cycle for dense matrix
@@ -330,32 +300,8 @@ class AuctionCommon
         offset = 0;
         return AuctionCommon<Scalar>::splitToIntervals(parts, entries);
     }
-    /**
-     * returns true if p_j <= lambda for all unassigned objects.
-     *
-     * @param c locked columns
-     * @param prices prices of objects
-     * @param lambda bidding threshold
-     * @return true if all prices of unassigned objects are below lambda,
-     * otherwise false
-     */
-    static const bool unassignedObjectsLTlambda(const Locks & c, const Scalars & prices,
-                                                const Scalar lambda)
-    {
-        for (size_t j = 0; j < c.size(); ++j)
-            if (!c[j] && prices[j] > lambda)
-                return false;
-        return true;
-    }
 
-    /**
-     * check if all persons are assigned
-     * @return true if all persons are assigned, otherwise false
-     */
-    static const bool allPersonsAssigned(const Locks & r)
-    {
-        return std::all_of(r.begin(), r.end(), [](bool const & value) { return value; });
-    }
+
 
   private:
     AuctionCommon();

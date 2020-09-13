@@ -1,15 +1,14 @@
 
-#include "AuctionAlgorithm/Auction.h"
-#include "AuctionAlgorithm/AuctionMT.h"
+#include <auction>
 
 #include <random>
-using namespace LSAP;
+using namespace Auction;
 
 typedef double Scalar;
 
 typedef Eigen::Matrix<Scalar, -1, -1> WeightMatrix;
 
-const Scalar objFuncValue(const typename Auction<Scalar>::Edges & edges )
+const Scalar objFuncValue(const typename Solver<Scalar>::Edges & edges )
 {
 	Scalar val = 0.;
 	for ( auto & e : edges)
@@ -39,27 +38,13 @@ int main(int argc, char **argv)
 	s = m.sparseView(); // fill sparse from dense
 	s.makeCompressed(); // be sure to compress!
 
-	// result type
-	Auction<double>::Edges solution;
-
 	// single threaded computation and some time measurement
-	MEASURE_DURATION_SINGLE((solution = Auction<double>::solve(m)));
+	Solver<double>::Edges solution = Solver<double>::solve(m);
 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
 
 	for ( auto & e: solution )
 		std::cout << "(" << e.x << ", " << e.y << ") ";
 	std::cout << std::endl;
-
-// 	MEASURE_DURATION_SINGLE((solution = Auction<double, Eigen::SparseMatrix<double, Eigen::RowMajor> >::solve(s)));
-// 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
-
-// //
-// //	// multi threaded computation (2 threads) and time measurement
-// 	MEASURE_DURATION_SINGLE((solution = AuctionMT<double>::solve(m, 4)));
-// 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
-
-// 	MEASURE_DURATION_SINGLE((solution = AuctionMT<double, Eigen::SparseMatrix<double, Eigen::RowMajor> >::solve(s, 4)));
-// 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
 
 
 }

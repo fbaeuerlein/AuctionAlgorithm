@@ -8,19 +8,11 @@
 #ifndef INTERNAL_H_
 #define INTERNAL_H_
 
-#include <eigen/Eigen/Core>
-#include <eigen/Eigen/Sparse>
-#include <iostream>
-#include <vector>
+
 
 #define __AUCTION_EPSILON_MULTIPLIER 1e-5 // epsilon multiplier
 #define __AUCTION_INF 1e6                 // infinity for setting second best match
 
-//// which type of coefficient in weight matrix
-typedef double Scalar;
-
-// locking of rows/cols
-typedef std::vector<bool> LockVector;
 
 #define MEASURE_DURATION_SINGLE(__MD_COMMAND__)                                                    \
     {                                                                                              \
