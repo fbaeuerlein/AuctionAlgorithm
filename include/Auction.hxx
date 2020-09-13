@@ -10,6 +10,7 @@
 
 #include "../internal.h"
 #include "AuctionCommon.hxx"
+#include "Matrix.hxx"
 #include <cassert>
 
 //#define DEBUG_AUCTION
@@ -17,7 +18,79 @@
 namespace Auction
 {
 
-template <typename Scalar = double, typename MatrixType = Eigen::Matrix<Scalar, -1, -1>>
+namespace detail
+{
+
+class Locks
+{
+  public:
+    Locks(size_t const & size)
+        : _locks(size, false)
+    {
+    }
+
+    Locks() = delete;
+
+    /**
+     * @brief locks the i-th flag
+     *
+     * @param index index of the flag
+     */
+    void lock(size_t const & index)
+    {
+        assert(index < _locks.size());
+        _locks[index] = true;
+        _locked++;
+    }
+
+    /**
+     * @brief unlocks the i-th flag
+     *
+     * @param index index of the flag
+     */
+    void unlock(size_t const & index)
+    {
+        assert(index < _locks.size());
+        _locks[index] = false;
+        _locked--;
+    }
+
+    /**
+     * @brief indicates that the i-th flag is set locked
+     *
+     * @param index index = i-th flag
+     * @return true if flag is set locked
+     * @return false otherwise
+     */
+    bool is_locked(size_t const & index)
+    {
+        assert(index < _locks.size());
+        return _locks[index];
+    }
+
+    /**
+     * @brief indicates that all flags are locked
+     *
+     * @return true if all flags are locked
+     * @return false otherwise
+     */
+    bool all_locked() const { return _locked == _locks.size(); }
+
+    /**
+     * @brief returns the number of the lock flags
+     *
+     * @return size_t number of the flags
+     */
+    size_t size() const { return _locks.size(); }
+
+  private:
+    std::vector<bool> _locks; ///< storage of the lock flags
+    size_t _locked{0};        ///< number of locked entries
+};
+
+} // namespace detail
+template <typename Scalar = double,
+          typename MatrixType = DenseEigenMatrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>
 class Solver
 {
   public:
@@ -25,76 +98,12 @@ class Solver
     typedef typename AuctionCommon<Scalar>::Indices Indices;
     typedef typename AuctionCommon<Scalar>::Edge Edge;
     typedef typename AuctionCommon<Scalar>::Edges Edges;
-
-    class Locks
-    {
-        public:
-        Locks(size_t const & size) 
-            : _locks(size, false)
-        {}
-
-        Locks() = delete;
-
-        /**
-         * @brief locks the i-th flag
-         * 
-         * @param index index of the flag
-         */
-        void lock(size_t const & index ) 
-        { 
-            assert(index < _locks.size());
-            _locks[index] = true; 
-            _locked++;
-        }
-
-        /**
-         * @brief unlocks the i-th flag
-         * 
-         * @param index index of the flag
-         */
-        void unlock(size_t const & index ) 
-        { 
-            assert(index < _locks.size());
-            _locks[index] = false; 
-            _locked--;
-        }
-
-        /**
-         * @brief indicates that the i-th flag is set locked
-         * 
-         * @param index index = i-th flag
-         * @return true if flag is set locked
-         * @return false otherwise
-         */
-        bool is_locked(size_t const & index) 
-        {
-            assert(index < _locks.size()); 
-            return _locks[index]; 
-        }
-
-        /**
-         * @brief indicates that all flags are locked
-         * 
-         * @return true if all flags are locked
-         * @return false otherwise
-         */
-        bool all_locked() const { return _locked == _locks.size(); }
-
-        /**
-         * @brief returns the number of the lock flags
-         * 
-         * @return size_t number of the flags
-         */
-        size_t size() const { return _locks.size(); }
-        private:
-        std::vector<bool> _locks;   ///< storage of the lock flags
-        size_t _locked{0};          ///< number of locked entries
-    };
-
+    
   private:
     Solver() = delete;
 
   protected:
+    typedef detail::Locks Locks;
     Solver(size_t const & rows, size_t const & cols)
         : _rows(rows)
         , _cols(cols)
@@ -112,8 +121,6 @@ class Solver
     Scalar _lambda, _epsilon;
     Scalars _prices, _profits;
     Edges _edges; // refactor to use vector index as row/col index
-
-
 
   public:
     /**
@@ -179,8 +186,8 @@ class Solver
      * @param j_i best entry
      * @return true if assignment was found, otherwise false
      */
-    bool findForward(const Eigen::Matrix<Scalar, -1, -1> & a, const size_t i, Scalar & v_i,
-                     Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
+    bool findForward(MatrixType const & a, const size_t i, Scalar & v_i, Scalar & w_i,
+                     Scalar & a_i_ji, size_t & j_i)
     {
         const size_t cols = a.cols();
 
@@ -216,54 +223,55 @@ class Solver
         return assignmentFound;
     }
 
-    /**
-     * template specific implementation for finding the best entry in row
-     * using eigen sparse matrix with row major storage
-     * @param a	input matrix
-     * @param i row
-     * @param v_i best value
-     * @param w_i second best value
-     * @param a_i_ji value of entry
-     * @param j_i best entry
-     * @return true if assignment was found, otherwise false
-     */
-    bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a, const size_t i,
-                     Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
-    {
-        //			assert(a.IsRowMajor);
-        assert(a.isCompressed());
+    // TODO: move to matrix implementation!
+    // /**
+    //  * template specific implementation for finding the best entry in row
+    //  * using eigen sparse matrix with row major storage
+    //  * @param a	input matrix
+    //  * @param i row
+    //  * @param v_i best value
+    //  * @param w_i second best value
+    //  * @param a_i_ji value of entry
+    //  * @param j_i best entry
+    //  * @return true if assignment was found, otherwise false
+    //  */
+    // bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a, const size_t i,
+    //                  Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
+    // {
+    //     //			assert(a.IsRowMajor);
+    //     assert(a.isCompressed());
 
-        bool assignmentFound = false;
+    //     bool assignmentFound = false;
 
-        const auto outerStart = a.outerIndexPtr()[i];
-        const auto outerEnd = a.outerIndexPtr()[i + 1];
+    //     const auto outerStart = a.outerIndexPtr()[i];
+    //     const auto outerEnd = a.outerIndexPtr()[i + 1];
 
-        for (auto innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
-        {
-            const auto j = a.innerIndexPtr()[innerIdx];
-            const Scalar m_i_j = a.valuePtr()[innerIdx];
-            const Scalar diff = m_i_j - _prices[j];
-            if (diff > v_i)
-            {
-                // if there already was an entry found, this is the second best
-                if (assignmentFound)
-                {
-                    w_i = v_i;
-                }
+    //     for (auto innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
+    //     {
+    //         const auto j = a.innerIndexPtr()[innerIdx];
+    //         const Scalar m_i_j = a.valuePtr()[innerIdx];
+    //         const Scalar diff = m_i_j - _prices[j];
+    //         if (diff > v_i)
+    //         {
+    //             // if there already was an entry found, this is the second best
+    //             if (assignmentFound)
+    //             {
+    //                 w_i = v_i;
+    //             }
 
-                v_i = diff;
-                j_i = j;
-                a_i_ji = m_i_j;
-                assignmentFound = true;
-            }
-            if (diff > w_i && j_i != j)
-            {
-                w_i = diff;
-            }
-            // if no entry is bigger than v_i, check if there's still a bigger second best entry
-        }
-        return assignmentFound;
-    }
+    //             v_i = diff;
+    //             j_i = j;
+    //             a_i_ji = m_i_j;
+    //             assignmentFound = true;
+    //         }
+    //         if (diff > w_i && j_i != j)
+    //         {
+    //             w_i = diff;
+    //         }
+    //         // if no entry is bigger than v_i, check if there's still a bigger second best entry
+    //     }
+    //     return assignmentFound;
+    // }
 
     /**
      * @brief Forward cycle of auction algorithm
@@ -362,7 +370,7 @@ class Solver
 
         for (size_t i = 0; i < rows; i++) // for the j-th column
         {
-            const Scalar aij = a.coeff(i, j);
+            const Scalar aij = a(i, j);
             if (aij == 0)
             {
                 continue;
@@ -507,10 +515,7 @@ class Solver
      * check if all persons are assigned
      * @return true if all persons are assigned, otherwise false
      */
-    bool areAllPersonsAssigned()
-    {
-        return _locked_rows.all_locked();
-    }
+    bool areAllPersonsAssigned() { return _locked_rows.all_locked(); }
 
     /**
      * returns true if p_j <= lambda for all unassigned objects.

@@ -39,7 +39,8 @@ int main(int argc, char **argv)
 	s.makeCompressed(); // be sure to compress!
 
 	// single threaded computation and some time measurement
-	Solver<double>::Edges solution = Solver<double>::solve(m);
+	// TODO check if implicit conversion is not possible!
+	auto solution = Solver<double>::solve(m);
 	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
 
 	// for ( auto & e: solution )

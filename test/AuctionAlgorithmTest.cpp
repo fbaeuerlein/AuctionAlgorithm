@@ -95,7 +95,7 @@ TEST(test_data, data_03) {
 
   // example from
   // http://www.cse.psu.edu/~rtc12/CSE598C/comboptBlockICM.pdf
-  Eigen::MatrixXd m = Eigen::Matrix<double, 5, 5>();
+  Eigen::Matrix<double, 5, 5> m = Eigen::Matrix<double, 5, 5>();
 
   // clang-format off
     m <<   
@@ -112,7 +112,7 @@ TEST(test_data, data_03) {
   //   for ( size_t j = 0; j < m.cols(); ++j )
   //       m(i, j) = 1. - m(i, j);
 
-  auto solution = Solver<double>::solve(m.normalized());
+  auto solution = Solver<double>::solve(std::move(m));
   auto x = objectiveFunctionValue<double>(solution);
   typedef typename Solver<double>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
