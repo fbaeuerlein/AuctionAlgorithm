@@ -4,14 +4,14 @@
 
 using namespace Auction;
 
-template <typename T = DenseEigenMatrix<double>>
-auto objectiveFunctionValue(typename Solver<T>::Edges const &edges) -> typename T::scalar_t{
-  typename T::scalar_t result = 0;
-  for (auto const &e : edges) {
-    result += e.v;
-  }
-  return result;
-}
+// template <typename T = DenseEigenMatrix<double>>
+// auto objectiveFunctionValue(typename Solver<T>::Edges const &edges) -> typename T::scalar_t{
+//   typename T::scalar_t result = 0;
+//   for (auto const &e : edges) {
+//     result += e.v;
+//   }
+//   return result;
+// }
 
 // template <typename T>
 // T objectiveFunctionValue(typename Auction<T>::Edges const &edges) {
@@ -24,7 +24,7 @@ auto objectiveFunctionValue(typename Solver<T>::Edges const &edges) -> typename 
 
 template <typename T> void printEdges(typename Solver<T>::Edges const &edges) {
   for (auto const &e : edges) {
-    std::cout << "(" << e.x << ", " << e.y << ") = " << e.v << std::endl;
+    std::cout << "(" << e.x << ", " << e.y << ") " << std::endl;
     ;
   }
 }
@@ -56,8 +56,9 @@ TEST(DISABLED_test_data, data_01) {
     for ( size_t j = 0; j < m.cols(); ++j)
       m(i,j) = maxCoefficient - m(i,j);
 
-  auto solution = Auction::solve<>(m.transpose());
-  auto x = objectiveFunctionValue<>(solution);
+  m.transposeInPlace();
+  auto solution = Auction::solve<>(m);
+  // auto x = objectiveFunctionValue<>(solution);
   // // EXPECT_EQ(118.1, x);
   // std::cout << (m) << std::endl;
   printEdges<DenseEigenMatrix<double>>(solution);
@@ -124,7 +125,7 @@ TEST(test_data, data_03) {
   //       m(i, j) = 1. - m(i, j);
 
   auto solution = Auction::solve<>(m);
-  auto x = objectiveFunctionValue<>(solution);
+  // auto x = objectiveFunctionValue<>(solution);
   typedef typename Solver<>::Edge Edge;
   std::sort(solution.begin(), solution.end(), []( Edge const & e1, Edge const & e2 ) { return e1.x < e2.x; });
   EXPECT_EQ(0, solution[0].y);

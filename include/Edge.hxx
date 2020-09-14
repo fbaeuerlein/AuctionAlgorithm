@@ -10,10 +10,10 @@ namespace Auction
 template <typename Scalar>
 struct Edge
 {
-    Edge(size_t x_, size_t y_, Scalar v_)
+    Edge(size_t const & x_, size_t const & y_)
         : x(x_)
         , y(y_)
-        , v(v_)
+        // , v(v_)
     {
     }
     Edge() = default;
@@ -24,7 +24,7 @@ struct Edge
 
     size_t x{0};
     size_t y{0};
-    Scalar v{0};
+    // Scalar v{0};
 };
 
 } // namespace Auction

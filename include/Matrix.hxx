@@ -41,8 +41,8 @@ class DenseEigenMatrix
     // use template to also support transpose return types
 
     template<typename MatrixType>
-    DenseEigenMatrix(MatrixType && matrix) noexcept
-        : _matrix(std::forward<MatrixType>(matrix))
+    DenseEigenMatrix(MatrixType const & matrix) noexcept
+        : _matrix(matrix)
     {
     }
 
@@ -73,7 +73,7 @@ class DenseEigenMatrix
     size_t cols() const noexcept { return _matrix.cols(); }
 
   private:
-    matrix_t const _matrix;   ///< matrix type
+    matrix_t const & _matrix;   ///< matrix type
 };
 
 } // namespace Auction

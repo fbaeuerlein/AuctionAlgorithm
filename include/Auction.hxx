@@ -144,18 +144,18 @@ class Solver
     {
         do
         {
-            //		Step 1 (forward	auction cycle):
-            //		Execute iterations of the forward auction algorithm until at least one
-            //		more person becomes assigned. If there is an unassigned person left, go
-            //		to step 2; else go to step 3.
+            // Step 1 (forward	auction cycle):
+            // Execute iterations of the forward auction algorithm until at least one
+            // more person becomes assigned. If there is an unassigned person left, go
+            // to step 2; else go to step 3.
             while (forward())
                 ;
 
             if (areAllPersonsAssigned())
             {
-                //		Step 3 (reverse auction):
-                //		Execute successive iterations of the reverse auction algorithm until
-                // the 		algorithm terminates with p_j <= lambda for all unassigned objects j
+                // Step 3 (reverse auction):
+                // Execute successive iterations of the reverse auction algorithm until
+                // the algorithm terminates with p_j <= lambda for all unassigned objects j
                 while (true)
                 {
                     reverse();
@@ -169,10 +169,10 @@ class Solver
             else
             {
 
-                //		Step 2 (reverse auction cycle):
-                //		Execute several iterations of the reverse auction algorithm until at
-                // least 		one more object becomes assigned or until we have p_j <=
-                // lambda for all 		unassigned objects. If there is an unassigned person
+                // Step 2 (reverse auction cycle):
+                // Execute several iterations of the reverse auction algorithm until at
+                // least one more object becomes assigned or until we have p_j <=
+                // lambda for all unassigned objects. If there is an unassigned person
                 // left, go to step 1 else go to step 3
                 while (!reverse() || !unassignedObjectsLowerThanLambda())
                     ; // reverse auction
@@ -201,12 +201,12 @@ class Solver
 
         for (size_t j = 0; j < _matrix.cols(); j++) // for the j-th column
         {
-            const Scalar aij = _matrix(i, j);
+            Scalar const aij = _matrix(i, j);
             if (aij == 0)
             {
                 continue;
             }
-            const Scalar diff = aij - _prices[j];
+            Scalar const diff = aij - _prices[j];
             if (diff > v_i)
             {
                 // if there already was an entry found, this is the second best
@@ -279,7 +279,7 @@ class Solver
     //     return assignmentFound;
     // }
 
-    void updateEdgeRowOrAddEdge(size_t const & j_i, size_t const & i, Scalar const & a_i_ji)
+    void updateEdgeRowOrAddEdge(size_t const & j_i, size_t const & i)
     {
         auto it =
             std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.y == j_i; });
@@ -288,15 +288,14 @@ class Solver
             auto & edge = *it;
             _locked_rows.unlock(edge.x); // unlock previous row
             edge.x = i;
-            edge.v = a_i_ji;
         }
         else
         {
-            _edges.emplace_back(i, j_i, a_i_ji);
+            _edges.emplace_back(i, j_i);
         }
     }
 
-    void updateEdgeColumnOrAddEdge(size_t const & i_j, size_t const & j, Scalar const & a_ij_j)
+    void updateEdgeColumnOrAddEdge(size_t const & i_j, size_t const & j)
     {
         auto it =
             std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.x == i_j; });
@@ -304,14 +303,13 @@ class Solver
         // if j_i was assigned to different i' to begin, remove (i', j_i) from S
         if (it != _edges.end())
         {
-            auto & e = *it;
-            _locked_cols.unlock(e.y); // unlock col i'
-            e.y = j;
-            e.v = a_ij_j;
+            auto & edge = *it;
+            _locked_cols.unlock(edge.y); // unlock col i'
+            edge.y = j;
         }
         else
         {
-            _edges.emplace_back(i_j, j, a_ij_j);
+            _edges.emplace_back(i_j, j);
         }
     }
     /**
@@ -355,7 +353,7 @@ class Solver
 
             assignmentInThisIterationFound = false;
 
-            const Scalar bid = a_i_ji - w_i + _epsilon;
+            Scalar const bid = a_i_ji - w_i + _epsilon;
 
             //	P_i = w_i - E
             _profits[i] = w_i - _epsilon; // set new profit for person
@@ -369,7 +367,7 @@ class Solver
                 _locked_rows.lock(i);
                 _locked_cols.lock(j_i);
 
-                updateEdgeRowOrAddEdge(j_i, i, a_i_ji);
+                updateEdgeRowOrAddEdge(j_i, i);
 
                 assignmentInThisIterationFound = true;
             }
@@ -390,12 +388,12 @@ class Solver
 
         for (size_t i = 0; i < _matrix.rows(); i++) // for the j-th column
         {
-            const Scalar aij = _matrix(i, j);
+            Scalar const aij = _matrix(i, j);
             if (aij == 0)
             {
                 continue;
             }
-            const Scalar diff = aij - _profits[i];
+            Scalar const diff = aij - _profits[i];
             if (diff > b_j)
             {
                 // if there already was an entry found, this is the second best
@@ -417,7 +415,7 @@ class Solver
         return assignmentFound;
     }
 
-    void updateLambda()
+    void scaleLambda()
     {
         /** standard lambda scaling **/
         size_t lowerThanLambda = 0;
@@ -486,8 +484,8 @@ class Solver
             // if b_j >= L + E, case 1:
             if (b_j >= (_lambda + _epsilon))
             {
-                const Scalar diff = g_j - _epsilon;         // G_j - E
-                const Scalar max = std::max(_lambda, diff); //  max { L, G_j - E}
+                Scalar const diff = g_j - _epsilon;         // G_j - E
+                Scalar const max = std::max(_lambda, diff); //  max { L, G_j - E}
 
                 //	p_j = max { L, G_j - E}
                 _prices[j] = max;
@@ -498,7 +496,7 @@ class Solver
                 _locked_rows.lock(i_j);
                 _locked_cols.lock(j);
 
-                updateEdgeColumnOrAddEdge(i_j, j, a_ij_j);
+                updateEdgeColumnOrAddEdge(i_j, j);
 
                 assignmentInThisIterationFound = true;
             }
@@ -509,7 +507,7 @@ class Solver
 
                 assignmentInThisIterationFound = false;
 
-                updateLambda();
+                scaleLambda();
             }
             assignmentFound = assignmentInThisIterationFound;
         }

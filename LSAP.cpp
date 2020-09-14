@@ -4,11 +4,11 @@
 #include <random>
 
 template<typename Scalar>
-const Scalar objFuncValue(const typename Auction::Edges<Scalar> & edges )
+const Scalar objFuncValue(const typename Auction::Edges<Scalar> & edges, Eigen::MatrixXd const & m )
 {
 	Scalar val = 0.;
 	for ( auto & e : edges)
-		val += e.v;
+		val += m(e.x, e.y);
 
 	return val;
 }
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
 	// single threaded computation and some time measurement
 	// TODO check if implicit conversion is not possible!
 	auto solution = Auction::solve<>(m);
-	std::cout << "objective function value: " << objFuncValue(solution) << std::endl;
+	std::cout << "objective function value: " << objFuncValue(solution, m) << std::endl;
 
 	// for ( auto & e: solution )
 	// 	std::cout << "(" << e.x << ", " << e.y << ") ";
