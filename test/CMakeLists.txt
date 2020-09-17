@@ -7,3 +7,6 @@ include_directories(external/googletest/googletest/include ../include ../externa
 
 add_executable(AuctionAlgorithmTest AuctionAlgorithmTest.cpp)
 target_link_libraries(AuctionAlgorithmTest gtest_main)
+
+add_executable(LocksTest LocksTest.cpp)
+target_link_libraries(LocksTest gtest_main)

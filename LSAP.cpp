@@ -38,9 +38,9 @@ int main(int argc, char **argv)
 	auto solution = Auction::solve<>(m);
 	std::cout << "objective function value: " << objFuncValue(solution, m) << std::endl;
 
-	// for ( auto & e: solution )
-	// 	std::cout << "(" << e.x << ", " << e.y << ") ";
-	// std::cout << std::endl;
+	for ( auto & e: solution )
+		std::cout << e << " ";
+	std::cout << std::endl;
 
 
 }

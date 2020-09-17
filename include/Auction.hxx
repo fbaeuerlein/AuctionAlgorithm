@@ -3,6 +3,8 @@
  *
  *  Created on: May 21, 2013
  *      Author: fb
+ * @see
+ * https://dspace.mit.edu/bitstream/handle/1721.1/3302/P-2159-27790376.pdf?sequence=1&isAllowed=y
  */
 
 #ifndef AUCTION_H_
@@ -12,84 +14,13 @@
 #define __AUCTION_INF 1e6                 // infinity for setting second best match
 #include "Edge.hxx"
 #include "Matrix.hxx"
-#include <cassert>
+#include "Locks.hxx"
+#include <tuple>
 
 //#define DEBUG_AUCTION
 
 namespace Auction
 {
-
-namespace detail
-{
-
-class Locks
-{
-  public:
-    Locks(size_t const & size)
-        : _locks(size, false)
-    {
-    }
-
-    Locks() = delete;
-
-    /**
-     * @brief locks the i-th flag
-     *
-     * @param index index of the flag
-     */
-    void lock(size_t const & index)
-    {
-        assert(index < _locks.size());
-        _locks[index] = true;
-        _locked++;
-    }
-
-    /**
-     * @brief unlocks the i-th flag
-     *
-     * @param index index of the flag
-     */
-    void unlock(size_t const & index)
-    {
-        assert(index < _locks.size());
-        _locks[index] = false;
-        _locked--;
-    }
-
-    /**
-     * @brief indicates that the i-th flag is set locked
-     *
-     * @param index index = i-th flag
-     * @return true if flag is set locked
-     * @return false otherwise
-     */
-    bool is_locked(size_t const & index)
-    {
-        assert(index < _locks.size());
-        return _locks[index];
-    }
-
-    /**
-     * @brief indicates that all flags are locked
-     *
-     * @return true if all flags are locked
-     * @return false otherwise
-     */
-    bool all_locked() const { return _locked == _locks.size(); }
-
-    /**
-     * @brief returns the number of the lock flags
-     *
-     * @return size_t number of the flags
-     */
-    size_t size() const { return _locks.size(); }
-
-  private:
-    std::vector<bool> _locks; ///< storage of the lock flags
-    size_t _locked{0};        ///< number of locked entries
-};
-
-} // namespace detail
 
 template <typename T>
 using container_type = std::vector<T>;
@@ -137,7 +68,7 @@ class Solver
     Locks _locked_rows, _locked_cols;
     Scalar _lambda, _epsilon;
     Scalars _prices, _profits;
-    Edges _edges; // refactor to use vector index as row/col index
+    Edges _edges; 
 
   public:
     Edges solve()
@@ -148,8 +79,7 @@ class Solver
             // Execute iterations of the forward auction algorithm until at least one
             // more person becomes assigned. If there is an unassigned person left, go
             // to step 2; else go to step 3.
-            while (forward())
-                ;
+            while (forward());
 
             if (areAllPersonsAssigned())
             {
@@ -174,8 +104,7 @@ class Solver
                 // least one more object becomes assigned or until we have p_j <=
                 // lambda for all unassigned objects. If there is an unassigned person
                 // left, go to step 1 else go to step 3
-                while (!reverse() || !unassignedObjectsLowerThanLambda())
-                    ; // reverse auction
+                while (!reverse() || !unassignedObjectsLowerThanLambda());
             }
 
         } while (true);
@@ -184,6 +113,7 @@ class Solver
     }
 
   private:
+
     /**
      * template specific implementation for finding the best entry in row
      * used for dense matrix
@@ -195,7 +125,7 @@ class Solver
      * @param j_i best entry
      * @return true if assignment was found, otherwise false
      */
-    bool findForward(const size_t i, Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
+    bool findForward(size_t const & i, Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
     {
         bool assignmentFound = false;
 
@@ -228,56 +158,6 @@ class Solver
         }
         return assignmentFound;
     }
-
-    // TODO: move to matrix implementation!
-    // /**
-    //  * template specific implementation for finding the best entry in row
-    //  * using eigen sparse matrix with row major storage
-    //  * @param a	input matrix
-    //  * @param i row
-    //  * @param v_i best value
-    //  * @param w_i second best value
-    //  * @param a_i_ji value of entry
-    //  * @param j_i best entry
-    //  * @return true if assignment was found, otherwise false
-    //  */
-    // bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a, const size_t i,
-    //                  Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
-    // {
-    //     //			assert(a.IsRowMajor);
-    //     assert(a.isCompressed());
-
-    //     bool assignmentFound = false;
-
-    //     const auto outerStart = a.outerIndexPtr()[i];
-    //     const auto outerEnd = a.outerIndexPtr()[i + 1];
-
-    //     for (auto innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
-    //     {
-    //         const auto j = a.innerIndexPtr()[innerIdx];
-    //         const Scalar m_i_j = a.valuePtr()[innerIdx];
-    //         const Scalar diff = m_i_j - _prices[j];
-    //         if (diff > v_i)
-    //         {
-    //             // if there already was an entry found, this is the second best
-    //             if (assignmentFound)
-    //             {
-    //                 w_i = v_i;
-    //             }
-
-    //             v_i = diff;
-    //             j_i = j;
-    //             a_i_ji = m_i_j;
-    //             assignmentFound = true;
-    //         }
-    //         if (diff > w_i && j_i != j)
-    //         {
-    //             w_i = diff;
-    //         }
-    //         // if no entry is bigger than v_i, check if there's still a bigger second best entry
-    //     }
-    //     return assignmentFound;
-    // }
 
     void updateEdgeRowOrAddEdge(size_t const & j_i, size_t const & i)
     {
@@ -570,3 +450,53 @@ solve(Eigen::Transpose<Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCo
 }
 } // namespace Auction
 #endif /* AUCTION_H_ */
+
+    // TODO: move to matrix implementation!
+    // /**
+    //  * template specific implementation for finding the best entry in row
+    //  * using eigen sparse matrix with row major storage
+    //  * @param a	input matrix
+    //  * @param i row
+    //  * @param v_i best value
+    //  * @param w_i second best value
+    //  * @param a_i_ji value of entry
+    //  * @param j_i best entry
+    //  * @return true if assignment was found, otherwise false
+    //  */
+    // bool findForward(const Eigen::SparseMatrix<Scalar, Eigen::RowMajor> & a, const size_t i,
+    //                  Scalar & v_i, Scalar & w_i, Scalar & a_i_ji, size_t & j_i)
+    // {
+    //     //			assert(a.IsRowMajor);
+    //     assert(a.isCompressed());
+
+    //     bool assignmentFound = false;
+
+    //     const auto outerStart = a.outerIndexPtr()[i];
+    //     const auto outerEnd = a.outerIndexPtr()[i + 1];
+
+    //     for (auto innerIdx = outerStart; innerIdx < outerEnd; innerIdx++) // for the j-th column
+    //     {
+    //         const auto j = a.innerIndexPtr()[innerIdx];
+    //         const Scalar m_i_j = a.valuePtr()[innerIdx];
+    //         const Scalar diff = m_i_j - _prices[j];
+    //         if (diff > v_i)
+    //         {
+    //             // if there already was an entry found, this is the second best
+    //             if (assignmentFound)
+    //             {
+    //                 w_i = v_i;
+    //             }
+
+    //             v_i = diff;
+    //             j_i = j;
+    //             a_i_ji = m_i_j;
+    //             assignmentFound = true;
+    //         }
+    //         if (diff > w_i && j_i != j)
+    //         {
+    //             w_i = diff;
+    //         }
+    //         // if no entry is bigger than v_i, check if there's still a bigger second best entry
+    //     }
+    //     return assignmentFound;
+    // }
