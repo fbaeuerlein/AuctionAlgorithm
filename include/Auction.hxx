@@ -162,12 +162,12 @@ class Solver
     void updateEdgeRowOrAddEdge(size_t const & j_i, size_t const & i)
     {
         auto it =
-            std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.y == j_i; });
+            std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.col == j_i; });
         if (it != _edges.end())
         {
             auto & edge = *it;
-            _locked_rows.unlock(edge.x); // unlock previous row
-            edge.x = i;
+            _locked_rows.unlock(edge.row); // unlock previous row
+            edge.row = i;
         }
         else
         {
@@ -178,14 +178,14 @@ class Solver
     void updateEdgeColumnOrAddEdge(size_t const & i_j, size_t const & j)
     {
         auto it =
-            std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.x == i_j; });
+            std::find_if(_edges.begin(), _edges.end(), [&](Edge const & e) { return e.row == i_j; });
 
         // if j_i was assigned to different i' to begin, remove (i', j_i) from S
         if (it != _edges.end())
         {
             auto & edge = *it;
-            _locked_cols.unlock(edge.y); // unlock col i'
-            edge.y = j;
+            _locked_cols.unlock(edge.col); // unlock col i'
+            edge.col = j;
         }
         else
         {

@@ -11,8 +11,8 @@ template <typename Scalar>
 struct Edge
 {
     Edge(size_t const & x_, size_t const & y_)
-        : x(x_)
-        , y(y_)
+        : row(x_)
+        , col(y_)
     {
     }
     Edge() = default;
@@ -25,14 +25,14 @@ struct Edge
      * @brief transpose the current edge (i.e. swap x and y)
      *
      */
-    void transpose() { std::swap(x, y); }
+    void transpose() { std::swap(row, col); }
 
     /**
      * @brief return an Edge that is the transposed one of this
      *
      * @return Edge transposed edge
      */
-    Edge transposed() const { return Edge(y, x); }
+    Edge transposed() const { return Edge(col, row); }
 
     /**
      * @brief stream Edge to ostream
@@ -43,14 +43,14 @@ struct Edge
     template<typename T>
     friend std::ostream & operator<<(std::ostream & os, Edge<T> const & e);
 
-    size_t x{0};
-    size_t y{0};
+    size_t row{0};
+    size_t col{0};
 };
 
 template<typename Scalar>
 std::ostream & operator<<(std::ostream & os, Edge<Scalar> const & e)
 {
-    os << "(" << e.x << ", " << e.y << ")";
+    os << "(" << e.row << ", " << e.col << ")";
     return os;
 }
 

@@ -8,7 +8,7 @@ const Scalar objFuncValue(const typename Auction::Edges<Scalar> & edges, Eigen::
 {
 	Scalar val = 0.;
 	for ( auto & e : edges)
-		val += m(e.x, e.y);
+		val += m(e.row, e.col);
 
 	return val;
 }
